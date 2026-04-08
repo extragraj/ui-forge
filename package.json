@@ -1,0 +1,44 @@
+{
+  "name": "ui-forge",
+  "version": "1.0.0",
+  "description": "Production Next.js component generator from reference materials",
+  "type": "module",
+  "main": "scripts/invoke.js",
+  "bin": {
+    "ui-forge": "scripts/invoke.js"
+  },
+  "scripts": {
+    "scan": "node scripts/scan.js",
+    "generate": "node scripts/invoke.js"
+  },
+  "keywords": [
+    "nextjs",
+    "component",
+    "generator",
+    "ai",
+    "claude",
+    "skill",
+    "tsx",
+    "tailwind",
+    "react",
+    "vercel",
+    "shadcn",
+    "ui-components"
+  ],
+  "author": "Garry",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/username/ui-forge"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "SKILL.md",
+    "README.md",
+    "LICENSE",
+    "scripts/",
+    "references/"
+  ]
+}
