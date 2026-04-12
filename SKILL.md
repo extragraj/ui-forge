@@ -1,5 +1,6 @@
 ---
 name: ui-forge
+version: 0.1.1
 description: >
   Generates production-ready Next.js TSX components from prompts and reference
   materials (HTML, TSX, images, JSON). Converts sections, pages, and variants
@@ -12,6 +13,10 @@ description: >
 
 Production Next.js component generator using signal-based architecture. Converts HTML, TSX, images, and JSON into project-compliant components.
 
+## How It Works
+
+`invoke.js` is a **context-preparation script**, not an AI client. It loads `design-arch.json`, pre-processes reference files, detects signals, and prints structured generation context to stdout. You (the AI assistant) read that context and generate the component directly — no API calls, no API key required.
+
 ## When to Use
 
 - Create/convert components, sections, or page variants
@@ -22,14 +27,14 @@ Production Next.js component generator using signal-based architecture. Converts
 
 ## Prerequisites
 
-Check for `design/design-arch.json` in project root. If missing:
+Check for `design/design-arch.json` in the target project root. If missing:
 ```bash
 node ${CLAUDE_SKILL_DIR}/scripts/scan.js
 ```
 
 Contains: component directories, used libraries, Tailwind tokens, global CSS, design standards, patterns.
 
-Environment: Requires `ANTHROPIC_API_KEY` environment variable.
+**No API key required.** Scan uses the `claude` CLI if available, otherwise static analysis. Generation context is prepared by the script; you generate the component.
 
 ## Usage
 
@@ -37,8 +42,11 @@ Environment: Requires `ANTHROPIC_API_KEY` environment variable.
 ```bash
 node ${CLAUDE_SKILL_DIR}/scripts/invoke.js \
   --task "Convert hero section" \
-  --refs ./hero.html
+  --refs ./hero.html \
+  --output ./components/Hero.tsx
 ```
+
+Read the stdout output and generate the component at the path specified in `WRITE OUTPUT TO`.
 
 **With multiple refs:**
 ```bash
@@ -49,17 +57,22 @@ node ${CLAUDE_SKILL_DIR}/scripts/invoke.js \
 
 **Page conversion (two-stage):**
 ```bash
-# Stage 1: Plan
+# Stage 1 — outputs decomposition context; you write design/forge-page-plan.json
 node ${CLAUDE_SKILL_DIR}/scripts/invoke.js --task "Convert page" --refs ./page.html
-# Edit design/forge-page-plan.json
-# Stage 2: Generate
+
+# Review the plan. Set existingProjectSection:true on sections to skip.
+
+# Stage 2 — plan file exists; outputs generation context for each section
 node ${CLAUDE_SKILL_DIR}/scripts/invoke.js --task "Convert page" --refs ./page.html
+
+# Force Stage 1 to re-run (discard existing plan):
+node ${CLAUDE_SKILL_DIR}/scripts/invoke.js --task "Convert page" --refs ./page.html --replan
 ```
 
 **Flags:**
 - `--task` (required): What to build
 - `--refs`: Comma-separated reference files
-- `--output`: Output file path
+- `--output`: Target output file path (included in context)
 - `--rescan`: Re-run scan.js first
 - `--replan`: Force Stage 1 re-run
 
@@ -71,17 +84,19 @@ node ${CLAUDE_SKILL_DIR}/scripts/invoke.js --task "Convert page" --refs ./page.h
 
 **Modifiers (stackable):**
 - `+CONFIG` — JSON/data file present
-- `+IMAGE` — Image file present
+- `+IMAGE` — Image file present (read via vision capability)
 
 **Examples:**
 - HTML → `CONVERT_SECTION`
-- HTML + JSON → `CONVERT_SECTION + CONFIG`
-- Image → `CONVERT_SECTION + IMAGE`
+- HTML + JSON → `CONVERT_SECTION +CONFIG`
+- Image → `CONVERT_SECTION +IMAGE`
 - Large HTML → `CONVERT_PAGE`
 
 ## Output Format
 
-**FORGE NOTES** (always first):
+The script prints structured context to stdout. You generate the component based on it.
+
+Generated components must always begin with `// FORGE NOTES`:
 ```tsx
 // FORGE NOTES
 // Detected: [ref type and styling]
@@ -107,8 +122,8 @@ node ${CLAUDE_SKILL_DIR}/scripts/invoke.js --task "Convert page" --refs ./page.h
 ## Advanced
 
 See `${CLAUDE_SKILL_DIR}/references/`:
-- `advanced-usage.md` — Config files, troubleshooting, API
+- `advanced-usage.md` — Config files, custom signals, troubleshooting
 - `examples.md` — Real-world conversion examples
 - `prompt-patterns.md` — Signal composition patterns
 
-**Requires:** Node.js ≥18, ANTHROPIC_API_KEY
+**Requires:** Node.js ≥18

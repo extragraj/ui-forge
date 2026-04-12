@@ -1,15 +1,12 @@
 {
   "name": "ui-forge",
-  "version": "1.0.0",
-  "description": "Production Next.js component generator from reference materials",
+  "version": "0.1.1",
+  "description": "Production Next.js component generator for Claude Code and AI coding assistants",
   "type": "module",
-  "main": "scripts/invoke.js",
-  "bin": {
-    "ui-forge": "scripts/invoke.js"
-  },
   "scripts": {
     "scan": "node scripts/scan.js",
-    "generate": "node scripts/invoke.js"
+    "generate": "node scripts/invoke.js",
+    "sync-version": "node scripts/sync-version.mjs"
   },
   "keywords": [
     "nextjs",
@@ -29,7 +26,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/username/ui-forge"
+    "url": "https://github.com/extragraj/ui-forge"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -39,6 +36,7 @@
     "README.md",
     "LICENSE",
     "scripts/",
-    "references/"
+    "references/",
+    "change-logs/"
   ]
 }

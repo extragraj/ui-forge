@@ -1,0 +1,18 @@
+{
+  "_v": 3,
+  "_scanned": "2026-04-12T07:54:23.470Z",
+  "isStackShift": false,
+  "componentLib": [
+    "./components"
+  ],
+  "usedComponents": [],
+  "usedLibraries": [],
+  "tailwind": null,
+  "globalCss": null,
+  "designStandards": {},
+  "patterns": {
+    "spacing": "unknown",
+    "typography": "unknown",
+    "conventions": []
+  }
+}

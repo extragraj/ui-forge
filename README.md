@@ -4,101 +4,44 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org)
 [![Skills Compatible](https://img.shields.io/badge/skills-compatible-blue)](https://github.com/vercel/skills-cli)
 
-Production-ready Next.js component generator from reference materials. Converts HTML, TSX, images, and JSON into project-compliant components that match your existing design system.
+> **Version** 0.1.1
+
+Next.js component generator for Claude Code and AI coding assistants. Converts HTML, TSX, images, and JSON reference materials into production-ready components that match your project's existing design system — using your actual component libraries, Tailwind tokens, and coding conventions.
 
 ## What is UI Forge?
 
-UI Forge is an AI-powered component generator that transforms reference materials into production Next.js components. Unlike simple code generators, UI Forge:
+UI Forge is a Claude Code skill that understands your project before generating anything. It scans your codebase to extract component libraries, Tailwind tokens, and design standards, then uses that context to produce components that fit your stack — not generic templates.
 
-**Understands your project:**
-- Scans your codebase to detect component libraries (shadcn/ui, Radix, etc.)
-- Extracts Tailwind tokens and theme configuration
-- Finds and follows your component standard documentation
-- Maps reference code to your actual project patterns
-
-**Handles multiple input types:**
-- HTML templates → TSX components
-- Reference TSX → Project-library-compliant TSX
-- Design mockups (images) → Implemented components
-- JSON data shapes → Config-driven components
-- Full pages → Modular section breakdown
-
-**Produces quality output:**
-- Production-ready code (no TODOs or stubs)
-- Proper TypeScript types (reuses existing project types)
-- Library component swapping (ref button → your Button component)
-- Token mapping (ref colors → your Tailwind theme)
-- FORGE NOTES documentation of all transformations
-
-**Perfect for:**
-- Converting design handoffs (Figma exports, HTML templates) to your stack
-- Migrating components from other component libraries
-- Generating variants of existing patterns
-- Building config-driven components from data shapes
-- Scaffolding new sections that match project conventions
+- **Multi-input** — HTML templates, reference TSX, design images, JSON data shapes, or any combination
+- **Design-aware** — reads your `tailwind.config`, global CSS, and component standards to map tokens and swap library components
+- **Signal-based** — detects input type automatically and composes the right generation strategy
+- **Documented output** — every import swap, token mapping, and divergence is recorded in `FORGE NOTES`
 
 ## Installation
 
-### Via Skills CLI (Recommended)
-
 ```bash
-# Install globally
-npx skills add username/ui-forge
-
-# Or add to a specific project
-cd your-nextjs-project
-npx skills add username/ui-forge
+npx skills add extragraj/ui-forge -y -g
 ```
 
-### Manual Installation
+| Flag | Description |
+|------|-------------|
+| `-y` | Auto-confirm all prompts |
+| `-g` | Install globally — available across all projects |
 
-```bash
-# Clone the repository
-git clone https://github.com/username/ui-forge.git
-cd ui-forge
-
-# No build step required - uses Node.js stdlib only
-```
-
-### Prerequisites Checklist
-
-- [x] Node.js >= 18.0.0
-- [x] Next.js project (App Router or Pages Router)
-- [x] Anthropic API key (for AI generation)
-- [x] Optional: Tailwind CSS (for token mapping)
-- [x] Optional: Component library (shadcn/ui, Radix, etc.)
-
-**Set up your API key:**
-
-```bash
-export ANTHROPIC_API_KEY=your_key_here
-# Add to ~/.bashrc or ~/.zshrc for persistence
-```
 
 ## Quick Start
 
-### 1. Scan Your Project
+### 1. Scan your project
 
-First time only — creates `design/design-arch.json`:
+Run once to create `design/design-arch.json` — the design authority file that drives all generation.
 
 ```bash
 node scripts/scan.js
 ```
 
-This analyzes your project and creates a design authority file containing:
-- Component libraries in use
-- Tailwind theme tokens
-- Typography and spacing patterns
-- Component standard documentation (if present)
+This captures your component directories, used libraries, Tailwind tokens, global CSS, and any design standard documents. Re-run when you add new libraries, update your Tailwind theme, or change component standards.
 
-**You only need to re-run this when:**
-- You add new component libraries
-- You update your Tailwind theme significantly
-- You change component standards
-
-### 2. Generate a Component
-
-Convert a single section or component:
+### 2. Generate a component
 
 ```bash
 node scripts/invoke.js \
@@ -107,12 +50,7 @@ node scripts/invoke.js \
   --output ./components/Hero.tsx
 ```
 
-**What happens:**
-1. Reads `design-arch.json` to understand your project
-2. Analyzes the reference file (detects Tailwind, vanilla HTML, etc.)
-3. Maps reference components to your project libraries
-4. Generates production TSX with proper imports and types
-5. Outputs with FORGE NOTES documenting all transformations
+UI Forge reads `design-arch.json`, classifies your reference, detects signals, and prints structured generation context to stdout. Your AI assistant reads that context and writes the component — no separate API call needed.
 
 **Example output:**
 
@@ -136,11 +74,11 @@ export default function Hero() {
 }
 ```
 
-### 3. Convert Full Pages (Two-Stage Pipeline)
+### 3. Full page conversion (two-stage)
 
-For large pages with multiple sections:
+For pages with multiple sections (>400 lines or when the task mentions "page"), UI Forge uses a two-stage pipeline.
 
-**Stage 1 — Plan the decomposition:**
+**Stage 1 — Decompose the page:**
 
 ```bash
 node scripts/invoke.js \
@@ -148,203 +86,109 @@ node scripts/invoke.js \
   --refs ./landing.html
 ```
 
-Creates `design/forge-page-plan.json`:
+Writes `design/forge-page-plan.json` and exits. Review the plan — set `existingProjectSection: true` on any sections you already have, adjust names or line ranges as needed.
 
 ```json
 {
-  "_ref": "./landing.html",
-  "_created": "2026-04-08T10:30:00.000Z",
   "sections": [
-    {
-      "name": "hero",
-      "type": "hero",
-      "lines": [1, 68],
-      "existingProjectSection": false
-    },
-    {
-      "name": "features",
-      "type": "features-grid",
-      "lines": [69, 234],
-      "existingProjectSection": true
-    }
+    { "name": "hero", "type": "hero", "lines": [1, 68], "existingProjectSection": false },
+    { "name": "features", "type": "features-grid", "lines": [69, 234], "existingProjectSection": true }
   ]
 }
 ```
 
-**Edit the plan:**
-- Set `existingProjectSection: true` to skip sections you already have
-- Rename `name` or `type` for better component names
-- Review line ranges to ensure proper section boundaries
-
-**Stage 2 — Generate the sections:**
+**Stage 2 — Generate sections:**
 
 ```bash
-# Run the same command again
 node scripts/invoke.js \
   --task "Convert landing page" \
   --refs ./landing.html
 ```
 
-Generates each section sequentially where `existingProjectSection: false`.
+The plan file exists — UI Forge detects it and generates each `existingProjectSection: false` section sequentially. To discard the plan and restart Stage 1, pass `--replan`.
 
 ## Features
 
-### Signal-Based Architecture
+### Signal-Based Generation
 
-UI Forge uses compositional signal detection to determine the right generation strategy:
+UI Forge classifies your inputs and composes the right strategy automatically:
 
-**Primary signals (scope):**
-- `CONVERT_PAGE` — Full page decomposition (> 400 lines or task mentions "page")
-- `CONVERT_SECTION` — Single component/section (default)
+| Signal | Trigger | Behavior |
+|--------|---------|----------|
+| `CONVERT_SECTION` | Default | Single component generation |
+| `CONVERT_PAGE` | >400 lines or task mentions "page" / "landing" | Two-stage pipeline |
+| `+CONFIG` | JSON or data file present | Treats JSON keys as typed props schema |
+| `+IMAGE` | Image file attached | Vision API analyzes layout, hierarchy, and colors |
 
-**Modifiers (stackable):**
-- `+CONFIG` — JSON/data file present → generates config-driven component
-- `+IMAGE` — Image file present → uses vision API for design reference
-
-**Example combinations:**
-- HTML file → `CONVERT_SECTION`
-- HTML + JSON → `CONVERT_SECTION` + `CONFIG`
-- Image mockup → `CONVERT_SECTION` + `IMAGE`
-- Large HTML → `CONVERT_PAGE` (two-stage pipeline)
-- Large HTML + JSON + images → `CONVERT_PAGE` + `CONFIG` + `IMAGE`
+Signals stack — `CONVERT_PAGE + CONFIG + IMAGE` is a valid combination and composes all three instructions.
 
 ### Intelligent Token Mapping
 
-**Color tokens:**
+Style values in the reference are extracted and mapped to your project's design tokens:
+
 ```
-ref: bg-blue-500
-→ bg-primary (from your tailwind.config.js)
+ref: bg-blue-500       →  bg-primary
+ref: padding: 20px     →  p-5
+ref: font-size: 24px   →  text-2xl
 ```
 
-**Spacing:**
-```
-ref: padding: 20px
-→ p-5 (matches your project's spacing scale)
-```
-
-**Typography:**
-```
-ref: font-size: 24px
-→ text-2xl (from your typography system)
-```
+Every mapping and divergence is recorded in `FORGE NOTES`. When no close match exists, the generator notes its judgment call.
 
 ### Library Component Swapping
 
-Automatically replaces reference components with your project's libraries:
+Reference components are replaced with your project's library equivalents:
 
-**Example: HTML → shadcn/ui**
-```
+```tsx
+// HTML → shadcn/ui
 <button class="...">  →  <Button variant="default">
 <div class="card">    →  <Card>
 <input type="text">   →  <Input />
-```
 
-**Example: Material UI → shadcn/ui**
-```tsx
+// Material UI → shadcn/ui
 import { Button } from '@mui/material'
-<Button variant="contained">
-
-// Becomes:
+// becomes:
 import { Button } from '@/components/ui/button'
-<Button variant="default">
 ```
 
-### Project Standards Integration
+### Design Standards Integration
 
-If you have a component standard document, UI Forge follows it:
+Point `design-arch.json` at any Markdown standards document and UI Forge will follow it at the highest resolution priority:
 
-```
-Found: docs/component-standards.md
-→ Loads and follows all component usage rules
-→ Uses specified props patterns
-→ Matches naming conventions
-→ Follows composition patterns
+```json
+"designStandards": {
+  "componentGuide": "./design/standards/component-guide.md"
+}
 ```
 
-**Example standards it respects:**
-- "Always use Button instead of <button>"
-- "Cards must have explicit border radius"
-- "Images require priority prop for above-fold content"
-- Custom prop naming conventions
+Standards inject automatically into the generation system prompt — no template variable needed.
 
-## Documentation
+### Multiple Reference Inputs
 
-### Full Documentation
+Pass any combination of file types together:
 
-- **[SKILL.md](./SKILL.md)** — Complete skill reference (usage, signals, output format)
-- **[Advanced Usage](./references/advanced-usage.md)** — Config files, troubleshooting, API
-- **[Examples](./references/examples.md)** — Real-world conversion examples
-
-### API Reference
-
-**Programmatic usage (Node.js):**
-
-```javascript
-import { forge } from './scripts/invoke.js'
-
-const result = await forge({
-  task: "Convert pricing section",
-  refs: ["./pricing.html", "./pricing-data.json"],
-  output: "./components/Pricing.tsx"
-})
-```
-
-See [Advanced Usage](./references/advanced-usage.md) for full API documentation.
-
-### Example Scenarios
-
-**Convert HTML template:**
 ```bash
 node scripts/invoke.js \
-  --task "Convert hero section" \
-  --refs ./hero.html
-```
-
-**Build from image mockup:**
-```bash
-node scripts/invoke.js \
-  --task "Match this design" \
-  --refs ./hero-mockup.png
-```
-
-**Config-driven component:**
-```bash
-node scripts/invoke.js \
-  --task "Build feature grid" \
-  --refs ./features-data.json
-```
-
-**Multiple references:**
-```bash
-node scripts/invoke.js \
-  --task "Build pricing table with data" \
+  --task "Build pricing table" \
   --refs ./pricing.html,./tiers.json,./mockup.png
 ```
 
-See [Examples](./references/examples.md) for complete walkthroughs with outputs.
+**Resolution priority:** Design standards → `design-arch.json` → JSON (data shape) → HTML (layout) → Image (visual proportions)
 
 ## Architecture
 
-### Design Authority System
+### Design Authority (`design/design-arch.json`)
 
-UI Forge uses a cached design authority file (`design/design-arch.json`) that contains:
+Created by `scan.js` and cached until you re-run it. The v3 schema:
 
 ```json
 {
   "_v": 3,
   "componentLib": ["./components", "./components/ui"],
   "usedComponents": ["Button", "Card", "Input", "Dialog"],
-  "usedLibraries": [
-    { "name": "framer-motion", "version": "^12.0.0", "uses": 14 }
-  ],
-  "tailwind": {
-    "themeSection": "...",
-    "colorTokens": "primary, secondary, accent"
-  },
+  "usedLibraries": [{ "name": "framer-motion", "version": "^12.0.0", "uses": 14 }],
+  "tailwind": { "themeSection": "...", "colorTokens": "primary, secondary, accent" },
   "globalCss": "...",
-  "designStandards": {
-    "stackshiftComponentStandard": "./design/standards/stackshift-ui.md"
-  },
+  "designStandards": { "stackshiftComponentStandard": "./design/standards/stackshift-ui.md" },
   "patterns": {
     "spacing": "4-based scale with py-20 sections",
     "typography": "font-sans default, headings font-bold",
@@ -353,97 +197,76 @@ UI Forge uses a cached design authority file (`design/design-arch.json`) that co
 }
 ```
 
-**v3 improvements:**
-- `componentLib` is now an array of discovered component directories
-- `designStandards` object for extensible user-defined standards
-- Component usage tracking in separate `design/component-usage.json`
-
-**Why cache?**
-- Scanning a full project takes 10-30 seconds
-- Design patterns change infrequently
-- Re-scan when libraries/theme change (weekly or as-needed)
-
-### Signal Detection
-
-1. Classify each ref file by content (not just extension)
-2. Detect primary scope (`CONVERT_PAGE` vs `CONVERT_SECTION`)
-3. Detect modifiers (`+CONFIG`, `+IMAGE`)
-4. Compose generation prompt from signal combination
-5. Load appropriate prompt patterns from `references/prompt-patterns.md`
-
-### Prompt Patterns
-
-Composable prompt segments stored in `references/prompt-patterns.md`:
-
-```markdown
-## SIGNAL: CONVERT_SECTION
-Base instructions for single component generation...
-
-## SIGNAL: CONFIG
-Addendum: Use JSON shape for component props...
-
-## SIGNAL: IMAGE
-Addendum: Match visual design from image...
-```
-
-Signals combine: `CONVERT_SECTION` + `CONFIG` + `IMAGE` merges all three patterns.
-
 ### Pre-Processing Pipeline
 
-1. Load design-arch.json
-2. Load component standard (if set)
-3. Classify ref files (reference, config, image, companion)
-4. Detect primary signal + modifiers
-5. Compose prompt from patterns
-6. Execute generation (Haiku for planning, Sonnet for code)
-7. Post-process output (FORGE NOTES + raw code)
+Reference files are pre-processed before injection to stay within context limits:
+
+| File type | Treatment |
+|-----------|-----------|
+| `.html` | Extract `<style>` blocks + inline styles → EXTRACTED STYLES header; strip `<head>`, `<script>`; cap body at 200 lines |
+| `.tsx` / `.jsx` | Extract `className` strings, CSS-in-JS blocks, external imports, props interface, JSX return block; strip state/effects/handlers |
+| `.json` / config `.ts` | Full content ≤100 lines; condensed with first 80 lines otherwise |
+| `.md` | Full content ≤150 lines; first 100 lines + remaining section headings otherwise |
+| Image | Path reference only — AI reads via its own vision capability |
+
+### Signal Detection and Context Composition
+
+`detectSignals()` classifies refs and determines primary signal + modifiers. `references/prompt-patterns.md` holds composable instruction blocks — `CONVERT_SECTION` provides the base addendum; `SIGNAL_CONFIG` and `SIGNAL_IMAGE` append addendum-only blocks. These are embedded in the `GENERATION INSTRUCTIONS` section of the stdout output that the AI reads.
+
+To add a new signal: add a `## SIGNAL_NAME` block with a fenced `**System Addendum:**` section in `prompt-patterns.md`, then add detection logic in `detectSignals()`.
 
 ## Token Optimization
 
-UI Forge uses a three-tier loading architecture:
+UI Forge is built to minimize the context consumed by your AI session at every stage.
 
-| State | Tokens | What's Loaded |
-|-------|--------|---------------|
-| Installed, idle | 50-100 | YAML frontmatter only |
-| Active (section) | 3000-5000 | SKILL.md + design-arch + refs |
-| Active (page Stage 1) | 2000-3000 | SKILL.md + design-arch (Haiku) |
-| Active (page Stage 2) | 3000-5000/section | Per-section sequential |
-| User reads examples | +500-1500 | Specific reference doc |
+| Optimization | Detail |
+|---|---|
+| Script generates zero AI tokens | `invoke.js` does all pre-processing locally; only the output context is consumed by the AI |
+| `prompt-patterns.md` cached | Read from disk once per run, not per section call |
+| Component scan O(files) | Single pass over all files vs. O(components × files) previously |
+| Page loop constants | Arch context and pattern computed once before the section loop |
+| Ref pre-processing | Style blocks, classNames, and imports extracted to compact headers; raw files never sent in full |
+| Images by path | Images are referenced by path and read via the AI's vision capability, not base64-encoded |
 
-**Best practices:**
-- Keep design-arch.json under 2000 tokens (excerpts, not full files)
-- Use two-stage pipeline for pages > 400 lines
-- Reference docs loaded only when explicitly needed
-- Sequential section generation (not parallel) to control token usage
+**Context budget (AI session):**
 
-## Contributing
+| Context | Est. tokens |
+|---------|------------|
+| Section generation | 3,000–5,000 |
+| Page Stage 1 (decomposition) | Varies with page length |
+| Page Stage 2 per section | 3,000–5,000 |
 
-Contributions welcome! Please:
+Keep `design-arch.json` under 2,000 tokens — use excerpts, not full file contents. Use the two-stage pipeline for pages over 400 lines.
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+## Documentation
 
-**Areas for contribution:**
-- Additional signal types (e.g., `+ANIMATION`, `+FORM`)
-- More prompt patterns in `references/prompt-patterns.md`
-- Support for additional component libraries
-- Improved token mapping heuristics
-- Test coverage
+- **[SKILL.md](./SKILL.md)** — Complete skill reference: signals, CLI flags, output format, resolution priority
+- **[Advanced Usage](./references/advanced-usage.md)** — Custom signals, troubleshooting, CI/CD integration
+- **[Examples](./references/examples.md)** — Real-world conversion walkthroughs with full outputs
+- **[Prompt Patterns](./references/prompt-patterns.md)** — Signal composition reference for extending UI Forge
 
-## License
+**CLI flags:**
 
-MIT License - see [LICENSE](./LICENSE) for details.
+| Flag | Description |
+|------|-------------|
+| `--task` | What to build (required) |
+| `--refs` | Comma-separated reference file paths |
+| `--output` | Write result to file path |
+| `--rescan` | Re-run `scan.js` before generating |
+| `--replan` | Force Stage 1 page plan regeneration |
+| `--config` | Load all params from a JSON file |
+
+## Changelog
+
+Full release notes are in [`change-logs/`](./change-logs/).
+
+| Version | Date | Notes |
+|---------|------|-------|
+| [0.1.1](./change-logs/0-1-1-pure-skill-refactor.md) | 2026-04-13 | Pure skill refactor — invoke.js is now a context-preparation script; removed programmatic API |
+| [0.1.0](./change-logs/0-1-0-initial-release.md) | 2026-04-12 | First round optimization — 23 bugs, discrepancies, and optimizations resolved post-audit |
 
 ---
 
-**Built for:**
-- Claude Code
-- Cursor
-- Cline
-- GitHub Copilot
-- Any AI coding assistant supporting the Vercel Skills format
+**Built for:** Claude Code · Cursor · Cline · GitHub Copilot · Any AI coding assistant supporting the Vercel Skills format
 
 **Token-optimal. Production-ready. Design-authority-driven.**

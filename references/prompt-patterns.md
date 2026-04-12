@@ -7,7 +7,10 @@ Composition rules:
 - `NEW_VARIANT` and `TYPES_AND_QUERY` are deprecated — do not load.
 
 Template variables in wrappers:
-`{USER_TASK}` `{REF_CONTENT}` `{CONFIG_CONTENT}` `{IMAGE_NOTE}` `{COMPANION_CONTENT}` `{DESIGN_ARCH_JSON}`
+`{USER_TASK}` `{REF_CONTENT}` `{CONFIG_CONTENT}` `{IMAGE_NOTE}` `{COMPANION_CONTENT}` `{DESIGN_ARCH_JSON}` `{DESIGN_ARCH_EXCERPT}`
+
+- `{DESIGN_ARCH_JSON}` — full serialised design authority context
+- `{DESIGN_ARCH_EXCERPT}` — compact first-8-lines summary (use in tight wrappers)
 
 ---
 

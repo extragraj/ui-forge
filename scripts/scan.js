@@ -8,12 +8,11 @@
  * Usage:
  *   node ${CLAUDE_SKILL_DIR}/scripts/scan.js
  *   node ${CLAUDE_SKILL_DIR}/scripts/scan.js --project-root /path/to/project
- *   node ${CLAUDE_SKILL_DIR}/scripts/scan.js --patch          (update patterns only, keep existing)
+ *   node ${CLAUDE_SKILL_DIR}/scripts/scan.js --patch          (re-scan everything, preserve existing designStandards entries)
  *
  * AI synthesis strategy (in priority order, first available wins):
- *   1. claude CLI  — works in Claude Code, Cursor, AntiGravity without an API key
- *   2. ANTHROPIC_API_KEY env var — direct Haiku API call
- *   3. Static only — pure Node.js analysis, no AI synthesis (still useful)
+ *   1. claude CLI  — works in Claude Code without an API key
+ *   2. Static only — pure Node.js analysis, no AI synthesis (still useful)
  */
 
 import {
@@ -62,7 +61,8 @@ function collectSourceFiles(ignorePatterns) {
   const files = []
   function walk(dir) {
     let entries
-    try { entries = readdirSync(dir) } catch { return }
+    try { entries = readdirSync(dir) }
+    catch (e) { process.stderr.write(`  skipped dir ${dir}: ${e.message}\n`); return }
     for (const entry of entries) {
       const full = join(dir, entry)
       const rel = relative(PROJECT_ROOT, full)
@@ -70,7 +70,7 @@ function collectSourceFiles(ignorePatterns) {
       try {
         if (statSync(full).isDirectory()) { walk(full); continue }
         if (['.ts', '.tsx', '.js', '.jsx'].includes(extname(full))) files.push(full)
-      } catch {}
+      } catch (e) { process.stderr.write(`  skipped ${full}: ${e.message}\n`) }
     }
   }
   walk(PROJECT_ROOT)
@@ -84,12 +84,13 @@ function scanImports(files) {
   const componentSet = new Set()
   // Match: from 'pkg' or from "@scope/pkg"
   const fromRe = /from\s+['"](@?[\w][\w\-\/\.]*)['"]/g
-  // Named imports from component lib (handles @stackshift-ui and similar)
-  const namedRe = /import\s*\{([^}]+)\}\s*from\s*['"](@[\w\-]+\/[\w\-]+)['"]/g
+  // Named imports from component lib (scoped packages and path-alias local directories)
+  const namedRe = /import\s*\{([^}]+)\}\s*from\s*['"](@[\w\-]+\/[\w\-\/\.]+|[@~#]\/[\w\-\/\.]+)['"]/g
 
   for (const file of files) {
     let src
-    try { src = readFileSync(file, 'utf-8') } catch { continue }
+    try { src = readFileSync(file, 'utf-8') }
+    catch (e) { process.stderr.write(`  skipped ${file}: ${e.message}\n`); continue }
 
     let m
     fromRe.lastIndex = 0
@@ -144,26 +145,22 @@ function discoverComponentDirectories() {
 
 function generateComponentUsageDict(componentSet, files) {
   const usage = {}
+  const components = [...componentSet]
 
-  // For each component, track which files use it
-  for (const component of componentSet) {
-    const usageFiles = []
-    const importPattern = new RegExp(`import\\s+\\{[^}]*${component}[^}]*\\}\\s+from`, 'g')
+  // Single pass over files — build inverted index instead of rescanning per component
+  for (const file of files) {
+    let src
+    try { src = readFileSync(file, 'utf-8') }
+    catch (e) { process.stderr.write(`  skipped ${file}: ${e.message}\n`); continue }
 
-    for (const file of files) {
-      try {
-        const content = readFileSync(file, 'utf-8')
-        if (importPattern.test(content)) {
-          usageFiles.push(file.replace(PROJECT_ROOT, '.'))
-        }
-      } catch {}
-    }
-
-    if (usageFiles.length > 0) {
-      usage[component] = {
-        uses: usageFiles.length,
-        files: usageFiles.slice(0, 10)  // Cap at 10 files
-      }
+    for (const component of components) {
+      // No `g` flag — boolean test, no lastIndex mutation
+      const pattern = new RegExp(`import\\s+\\{[^}]*\\b${component}\\b[^}]*\\}\\s+from`)
+      if (!pattern.test(src)) continue
+      if (!usage[component]) usage[component] = { uses: 0, files: [] }
+      usage[component].uses++
+      if (usage[component].files.length < 10)
+        usage[component].files.push(file.replace(PROJECT_ROOT, '.'))
     }
   }
 
@@ -285,49 +282,19 @@ function tryClaudeCLI(payload) {
   } catch { return null }
 }
 
-async function tryAnthropicAPI(payload) {
-  const key = process.env.ANTHROPIC_API_KEY
-  if (!key) return null
-
-  process.stderr.write('  using Anthropic API for synthesis\n')
-  try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 512,
-        messages: [{ role: 'user', content: SYNTHESIS_PROMPT(payload) }],
-      }),
-    })
-    if (!res.ok) return null
-    const data = await res.json()
-    const text = data.content?.[0]?.text?.trim() ?? ''
-    return JSON.parse(text.replace(/```json|```/g, '').trim())
-  } catch { return null }
-}
-
 function staticFallback(pkgCount) {
   process.stderr.write('  no AI available — using static analysis only\n')
   const isStackShift = !!(pkgCount['@stackshift-ui'] || pkgCount['@webriq-pagebuilder'])
   return { spacing: 'unknown', typography: 'unknown', colorTokens: '', conventions: [], isStackShift }
 }
 
-async function synthesize(payload, pkgCount) {
-  return (
-    tryClaudeCLI(payload) ??
-    await tryAnthropicAPI(payload) ??
-    staticFallback(pkgCount)
-  )
+function synthesize(payload, pkgCount) {
+  return tryClaudeCLI(payload) ?? staticFallback(pkgCount)
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-async function main() {
+function main() {
   process.stderr.write('ui-forge/scan: scanning project...\n')
 
   const ignore = loadIgnorePatterns()
@@ -345,7 +312,7 @@ async function main() {
     .map(([k, v]) => `${k}(${v})`).join(', ')
 
   process.stderr.write('  synthesizing patterns...\n')
-  const s = await synthesize(
+  const s = synthesize(
     { tailwindTheme: tailwind?.themeSection, globalCss, claudeMd, topPackages },
     pkgCount
   )
@@ -394,4 +361,4 @@ async function main() {
   process.stdout.write(JSON.stringify({ ok: true, path: OUT_FILE }) + '\n')
 }
 
-main().catch(e => { process.stderr.write(`scan error: ${e.message}\n`); process.exit(1) })
+try { main() } catch (e) { process.stderr.write(`scan error: ${e.message}\n`); process.exit(1) }

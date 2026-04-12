@@ -194,17 +194,6 @@ UI Forge reads this (excerpt in design-arch.json) and prefers semantic HTML tags
 node scripts/scan.js
 ```
 
-### Error: "ANTHROPIC_API_KEY not set"
-
-**Cause:** Environment variable missing.
-
-**Solution:**
-```bash
-export ANTHROPIC_API_KEY=your_key_here
-# Add to ~/.bashrc or ~/.zshrc for persistence
-echo 'export ANTHROPIC_API_KEY=your_key_here' >> ~/.zshrc
-```
-
 ### Error: "Reference file not found"
 
 **Cause:** Incorrect path or relative vs absolute path issue.
@@ -256,87 +245,6 @@ node scripts/invoke.js --task "Convert page" --refs ./page.html
 **Solution:**
 ```bash
 node scripts/scan.js  # Refresh design authority
-```
-
-## Programmatic API Usage
-
-### Importing as a Module
-
-```javascript
-import { forge } from './scripts/invoke.js'
-
-const result = await forge({
-  task: "Convert pricing section",
-  refs: ["./pricing.html", "./pricing-data.json"],
-  output: "./components/Pricing.tsx"
-})
-
-console.log(result.code)  // Generated code
-console.log(result.notes) // FORGE NOTES content
-```
-
-### API Options
-
-```typescript
-interface ForgeOptions {
-  task: string              // Required: what to build
-  refs?: string[]           // Optional: reference file paths
-  output?: string           // Optional: output file path (or returns string)
-  force?: boolean           // Optional: skip confirmations
-  model?: 'haiku' | 'sonnet' // Optional: override model (default: auto)
-}
-
-interface ForgeResult {
-  code: string              // Generated code
-  notes: string             // FORGE NOTES
-  files?: Array<{           // If multiple files
-    path: string
-    content: string
-  }>
-}
-```
-
-### Batch Generation
-
-Generate multiple components in sequence:
-
-```javascript
-import { forge } from './scripts/invoke.js'
-
-const components = [
-  { task: "Convert hero", refs: ["./hero.html"] },
-  { task: "Convert features", refs: ["./features.html"] },
-  { task: "Convert pricing", refs: ["./pricing.html", "./pricing.json"] }
-]
-
-for (const config of components) {
-  const result = await forge(config)
-  // Process result...
-}
-```
-
-### Custom Post-Processing
-
-Add custom logic after generation:
-
-```javascript
-import { forge } from './scripts/invoke.js'
-import { writeFileSync } from 'fs'
-
-const result = await forge({
-  task: "Convert hero",
-  refs: ["./hero.html"]
-})
-
-// Extract FORGE NOTES to separate file
-const notesMatch = result.code.match(/\/\/ FORGE NOTES\n([\s\S]*?)\n\n/)
-if (notesMatch) {
-  writeFileSync('./FORGE_NOTES.txt', notesMatch[1])
-}
-
-// Write code without notes
-const codeOnly = result.code.replace(/\/\/ FORGE NOTES\n[\s\S]*?\n\n/, '')
-writeFileSync('./components/Hero.tsx', codeOnly)
 ```
 
 ## Integration with Workflow Skills
@@ -397,32 +305,14 @@ For each MUI component:
 4. Update imports throughout project
 ```
 
-### Environment Variable Setup
-
-For CI/CD integration:
+### CI/CD Integration
 
 **GitHub Actions:**
 ```yaml
 - name: Generate components
-  env:
-    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   run: |
     node scripts/scan.js
     node scripts/invoke.js --task "Convert hero" --refs ./hero.html
-```
-
-**Local .env file:**
-```bash
-# .env (not committed)
-ANTHROPIC_API_KEY=your_key_here
-```
-
-Load in scripts:
-```javascript
-import { config } from 'dotenv'
-config()  // Loads .env
-
-// Now process.env.ANTHROPIC_API_KEY is available
 ```
 
 ## Advanced Signal Patterns
@@ -433,22 +323,24 @@ To add a new signal (requires editing `references/prompt-patterns.md`):
 
 **Example: Add `+ANIMATION` signal**
 
-1. Add pattern block in `prompt-patterns.md`:
+1. Add pattern block in `prompt-patterns.md` using the exact format `extractBlock()` parses:
 
 ```markdown
-## SIGNAL: ANIMATION
+## SIGNAL_ANIMATION
 
-**Addendum:**
+**System Addendum:**
+\```
 Include animation library imports and motion components.
 Use framer-motion if present in usedLibraries.
 Add animate, initial, and transition props.
+\```
 ```
 
-2. Update detection logic in `scripts/invoke.js` (around line 400):
+2. Update detection logic in `scripts/invoke.js` (inside `detectSignals()`, after the `modifiers` array):
 
 ```javascript
-// Add to modifier detection
-if (refFiles.some(f => task.includes('animate') || task.includes('motion'))) {
+// Add to modifier detection in detectSignals()
+if (task.includes('animate') || task.includes('motion')) {
   signals.modifiers.push('ANIMATION')
 }
 ```
@@ -519,35 +411,43 @@ wait
 
 ### Editing prompt-patterns.md
 
-Located at `references/prompt-patterns.md`. Structure:
+Located at `references/prompt-patterns.md`. Blocks are parsed by `extractBlock()` in `invoke.js`, which looks for `## SIGNAL_NAME` headings containing fenced `**System Addendum:**` and optionally `**Task Wrapper:**` blocks.
 
 ```markdown
-## SIGNAL: SIGNAL_NAME
+## SIGNAL_NAME
 
-**Wrapper:** (optional)
-Template for wrapping user task: {USER_TASK}
-
-**Addendum:**
-Additional instructions to append to base prompt.
+**System Addendum:**
+\```
+Additional instructions appended to the base system prompt.
 Can be multiple paragraphs.
 
-Use {DESIGN_ARCH_JSON} placeholder for injecting design authority.
-Use {COMPONENT_STANDARD} placeholder for injecting standard doc.
+Use {DESIGN_ARCH_JSON} to inject the full design authority.
+Use {DESIGN_ARCH_EXCERPT} for a compact 8-line summary instead.
+\```
+
+**Task Wrapper:** (optional — omit to use default CONVERT_SECTION wrapper)
+\```
+Custom task template. Must include {USER_TASK}.
+\```
 ```
+
+Design standards are injected automatically into the system prompt when `designStandards` entries exist in `design-arch.json`. They are not available as a template variable.
 
 ### Example Custom Pattern
 
 Add a custom pattern for form generation:
 
 ```markdown
-## SIGNAL: FORM
+## SIGNAL_FORM
 
-**Addendum:**
+**System Addendum:**
+\```
 Generate form using react-hook-form if present in usedLibraries.
 Include validation schema using zod.
 Add error messages for each field.
 Use project's Input, Select, and Button components.
 Include submit handler with proper TypeScript types.
+\```
 ```
 
 ### Testing Custom Patterns
