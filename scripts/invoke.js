@@ -10,17 +10,19 @@
  * its own session — no external dependencies, no network calls.
  *
  * CLI:
- *   node ${CLAUDE_SKILL_DIR}/scripts/invoke.js --task "Convert this hero section" --refs ./hero.html
- *   node ${CLAUDE_SKILL_DIR}/scripts/invoke.js --task "Convert page" --refs ./page.html
- *   node ${CLAUDE_SKILL_DIR}/scripts/invoke.js --task "..." --refs ./mockup.png,./section.tsx
- *   node ${CLAUDE_SKILL_DIR}/scripts/invoke.js --config ./forge-request.json
- *   node ${CLAUDE_SKILL_DIR}/scripts/invoke.js --task "..." --rescan
- *   node ${CLAUDE_SKILL_DIR}/scripts/invoke.js --task "..." --replan
+ *   node .claude/skills/ui-forge/scripts/invoke.js --task "Convert this hero section" --refs ./hero.html
+ *   node .claude/skills/ui-forge/scripts/invoke.js --task "Convert page" --refs ./page.html
+ *   node .claude/skills/ui-forge/scripts/invoke.js --task "..." --refs ./mockup.png,./section.tsx
+ *   node .claude/skills/ui-forge/scripts/invoke.js --config ./forge-request.json
+ *   node .claude/skills/ui-forge/scripts/invoke.js --task "..." --signal CONVERT_VARIANT --refs ./types.ts
+ *   node .claude/skills/ui-forge/scripts/invoke.js --task "..." --mode body-only --refs ./types.ts --output ./Variant.tsx
  *
  * Flags:
  *   --task      What to build (required unless --config)
  *   --refs      Comma-separated ref file paths
  *   --output    Target output file path (included in context for Claude to write)
+ *   --signal    Force primary signal: CONVERT_SECTION, CONVERT_PAGE, CONVERT_VARIANT
+ *   --mode      full (default) or body-only. body-only requires --output to point at an existing file
  *   --config    Load all params from a JSON file
  *   --rescan    Re-run scan.js before generating
  *   --replan    Force Stage 1 page plan regeneration
@@ -285,12 +287,43 @@ function loadRefs(refs = []) {
 
 // ─── Signal detection ─────────────────────────────────────────────────────────
 
-function detectSignals(task, classifiedRefs) {
+function isInterfaceFile(ref) {
+  if (!ref || !ref.content) return false
+  const ext = ref.ext?.toLowerCase()
+  if (ext !== '.ts' && ext !== '.tsx') return false
+  const lines = ref.rawLines ?? ref.content.split('\n')
+  if (lines.length > 150) return false
+  const raw = lines.join('\n')
+  return /(?:export\s+)?(?:interface|type)\s+\w+/.test(raw)
+}
+
+function detectSignals(task, classifiedRefs, explicitSignal) {
   const t = task.toLowerCase()
   const byRole = classifiedRefs.reduce((acc, r) => {
     ;(acc[r.role] ??= []).push(r)
     return acc
   }, {})
+
+  const modifiers = [
+    ...(byRole.config?.length ? ['CONFIG'] : []),
+    ...(byRole.image?.length ? ['IMAGE'] : []),
+  ]
+
+  // Explicit --signal override
+  if (explicitSignal) {
+    const sig = explicitSignal.toUpperCase()
+    if (!['CONVERT_SECTION', 'CONVERT_PAGE', 'CONVERT_VARIANT'].includes(sig))
+      throw new Error(`Unknown signal: ${explicitSignal}. Valid: CONVERT_SECTION, CONVERT_PAGE, CONVERT_VARIANT`)
+    return { primary: sig, modifiers, byRole }
+  }
+
+  // Auto-detect CONVERT_VARIANT: exactly one .ts/.tsx file exporting an interface,
+  // no HTML/image refs carrying layout, and file ≤150 lines
+  const allRefs = classifiedRefs
+  const tsRefs = allRefs.filter(r => (r.ext === '.ts' || r.ext === '.tsx') && r.role === 'config')
+  const htmlRefs = allRefs.filter(r => r.ext === '.html' && r.role === 'reference')
+  const layoutImages = byRole.image ?? []
+  const interfaceRef = tsRefs.length === 1 && isInterfaceFile(tsRefs[0]) ? tsRefs[0] : null
 
   const mainRef = byRole.reference?.[0]
   const isPage = mainRef && (
@@ -299,12 +332,23 @@ function detectSignals(task, classifiedRefs) {
     (mainRef.rawLines?.length ?? 0) > 400
   )
 
+  // Ambiguity guard (Task 4.2): interface file present but page triggers also fire
+  if (interfaceRef && htmlRefs.length === 0 && isPage) {
+    process.stderr.write(
+      `Error: Ambiguous signal. Refs include a props interface file (suggests CONVERT_VARIANT)\n`
+      + `but task/size suggest CONVERT_PAGE. Pass --signal explicitly.\n`
+    )
+    process.exit(1)
+  }
+
+  // Auto-detect variant: single interface file, no HTML layout refs
+  if (interfaceRef && htmlRefs.length === 0 && layoutImages.length === 0) {
+    return { primary: 'CONVERT_VARIANT', modifiers, byRole }
+  }
+
   return {
     primary: isPage ? 'CONVERT_PAGE' : 'CONVERT_SECTION',
-    modifiers: [
-      ...(byRole.config?.length ? ['CONFIG'] : []),
-      ...(byRole.image?.length ? ['IMAGE'] : []),
-    ],
+    modifiers,
     byRole,
   }
 }
@@ -332,7 +376,8 @@ function extractBlock(src, name) {
 
 function loadComposedAddendum(signals) {
   const src = getPatternSrc()
-  const base = extractBlock(src, 'CONVERT_SECTION') ?? { addendum: '' }
+  const baseName = signals.primary === 'CONVERT_VARIANT' ? 'SIGNAL_VARIANT' : 'CONVERT_SECTION'
+  const base = extractBlock(src, baseName) ?? { addendum: '' }
   const modAddendums = signals.modifiers
     .map(m => extractBlock(src, `SIGNAL_${m}`)?.addendum)
     .filter(Boolean)
@@ -347,7 +392,7 @@ function appendStandards(lines, standards) {
     if (content.length > 3000)
       process.stderr.write(`ui-forge: Warning — design standard "${key}" truncated to 3000 chars (${content.length} total). Consider splitting into focused sections.\n`)
     lines.push('')
-    lines.push(`DESIGN STANDARD (${key})`)
+    lines.push(`// --- STANDARD: ${key} ---`)
     lines.push(content.slice(0, 3000))
   }
 }
@@ -407,6 +452,73 @@ function buildSectionContext({ task, archCtx, signals, standards, addendum, outp
   if (output) lines.push(`WRITE OUTPUT TO: ${output}`)
   lines.push('Begin with // FORGE NOTES then raw TSX. No markdown fences. No preamble after FORGE NOTES.')
   lines.push('Multiple files: separate with // --- FILE: relative/path/to/file.tsx')
+
+  return lines.join('\n')
+}
+
+function buildVariantContext({ task, archCtx, signals, standards, addendum, output, mode }) {
+  const { byRole } = signals
+
+  // Under CONVERT_VARIANT, the interface file is classified as 'config' by loadRefs
+  // (it's a .ts file without JSX). Re-classify it as the contract.
+  const allConfigs = byRole.config ?? []
+  const interfaceRef = allConfigs.find(r => isInterfaceFile(r))
+  const configRef = allConfigs.find(r => r !== interfaceRef)
+  const imageRefs = byRole.image ?? []
+
+  const lines = []
+  lines.push(`=== UI FORGE ===`)
+  lines.push(`SIGNAL: CONVERT_VARIANT${signals.modifiers.length ? ' +' + signals.modifiers.join(' +') : ''}`)
+  lines.push(`MODE: ${mode}`)
+  lines.push('')
+  lines.push('TASK')
+  lines.push(task)
+  lines.push('')
+
+  // Standards at highest priority (Task 3)
+  appendStandards(lines, standards)
+
+  // Props interface — the contract
+  if (interfaceRef) {
+    lines.push('')
+    lines.push(`CONTRACT [${interfaceRef.path}]`)
+    lines.push(interfaceRef.content)
+  }
+
+  lines.push('')
+  lines.push('DESIGN AUTHORITY')
+  lines.push(archCtx)
+
+  if (configRef) {
+    lines.push('')
+    lines.push(`CONFIG [${configRef.path}]`)
+    lines.push(configRef.content)
+  }
+
+  if (imageRefs.length) {
+    lines.push('')
+    lines.push('IMAGES')
+    lines.push('Read and analyze each image file below using your vision capability:')
+    for (const img of imageRefs)
+      lines.push(`  ${img.fullPath}`)
+  }
+
+  lines.push('')
+  lines.push('GENERATION INSTRUCTIONS')
+  lines.push(addendum)
+  lines.push('')
+
+  if (mode === 'body-only') {
+    lines.push('MODE: body-only')
+    lines.push('The output file already exists. Preserve any existing import statements at the top.')
+    lines.push('Preserve any existing export signature skeleton if present.')
+    lines.push('Replace only the function body (or insert a complete default-export component if the file is empty but exists).')
+    lines.push('Place // FORGE NOTES immediately after the last import statement (or at file top if no imports).')
+    lines.push('')
+  }
+
+  if (output) lines.push(`WRITE OUTPUT TO: ${output}`)
+  lines.push('Begin with // FORGE NOTES then raw TSX. No markdown fences. No preamble after FORGE NOTES.')
 
   return lines.join('\n')
 }
@@ -518,11 +630,13 @@ ui-forge — Next.js component generator for Claude Code
   --task     What to build (required)
   --refs     Comma-separated ref files (HTML, TSX, JSON, image, markdown)
   --output   Target output file path (Claude will write here)
+  --signal   Force primary signal: CONVERT_SECTION, CONVERT_PAGE, CONVERT_VARIANT
+  --mode     full (default) or body-only (requires --output to point at existing file)
   --config   Load all params from JSON file
   --rescan   Re-run scan.js before generating
   --replan   Force Stage 1 page plan regeneration
 
-First run: node ${CLAUDE_SKILL_DIR}/scripts/scan.js
+First run: node .claude/skills/ui-forge/scripts/scan.js
 `)
     process.exit(1)
   }
@@ -540,9 +654,40 @@ First run: node ${CLAUDE_SKILL_DIR}/scripts/scan.js
 
   const arch = loadDesignArch()
   const classifiedRefs = loadRefs(params.refs ?? [])
-  const signals = detectSignals(params.task, classifiedRefs)
+  const signals = detectSignals(params.task, classifiedRefs, params.signal)
   const standards = loadDesignStandards(arch)
   const archCtx = archToContext(arch)
+
+  // Resolve mode: body-only is the default under CONVERT_VARIANT
+  let mode = params.mode ?? (signals.primary === 'CONVERT_VARIANT' ? 'body-only' : 'full')
+  if (mode !== 'full' && mode !== 'body-only')
+    throw new Error(`Unknown mode: ${mode}. Valid: full, body-only`)
+
+  // Validate body-only requirements
+  if (mode === 'body-only') {
+    if (!params.output)
+      throw new Error('--mode body-only requires --output to specify the target file.')
+    const outputFull = resolve(PROJECT_ROOT, params.output)
+    if (!existsSync(outputFull))
+      throw new Error(`--mode body-only requires --output to point at an existing file, but "${params.output}" does not exist.`)
+  }
+
+  // ── CONVERT_VARIANT ─────────────────────────────────────────────────────────
+  if (signals.primary === 'CONVERT_VARIANT') {
+    const addendum = loadComposedAddendum(signals)
+    process.stderr.write(`ui-forge: CONVERT_VARIANT${signals.modifiers.length ? ' +' + signals.modifiers.join(' +') : ''} [mode: ${mode}]\n`)
+
+    process.stdout.write(buildVariantContext({
+      task: params.task,
+      archCtx,
+      signals,
+      standards,
+      addendum,
+      output: params.output,
+      mode,
+    }) + '\n')
+    return
+  }
 
   // ── CONVERT_PAGE ────────────────────────────────────────────────────────────
   if (signals.primary === 'CONVERT_PAGE') {

@@ -4,7 +4,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org)
 [![Skills Compatible](https://img.shields.io/badge/skills-compatible-blue)](https://github.com/vercel/skills-cli)
 
-> **Version** 0.1.1
+> **Version** 0.1.2
 
 Next.js component generator for Claude Code and AI coding assistants. Converts HTML, TSX, images, and JSON reference materials into production-ready components that match your project's existing design system — using your actual component libraries, Tailwind tokens, and coding conventions.
 
@@ -252,6 +252,8 @@ Keep `design-arch.json` under 2,000 tokens — use excerpts, not full file conte
 | `--task` | What to build (required) |
 | `--refs` | Comma-separated reference file paths |
 | `--output` | Write result to file path |
+| `--signal` | Force primary signal: `CONVERT_SECTION`, `CONVERT_PAGE`, `CONVERT_VARIANT` |
+| `--mode` | `full` (default) or `body-only`. Default is `body-only` under `CONVERT_VARIANT`. |
 | `--rescan` | Re-run `scan.js` before generating |
 | `--replan` | Force Stage 1 page plan regeneration |
 | `--config` | Load all params from a JSON file |
@@ -262,6 +264,7 @@ Full release notes are in [`change-logs/`](./change-logs/).
 
 | Version | Date | Notes |
 |---------|------|-------|
+| [0.1.2](./change-logs/0-1-2-companion-mode.md) | 2026-04-14 | Companion mode — `CONVERT_VARIANT` signal, `--signal` and `--mode` flags, body-only output, page-pipeline guard |
 | [0.1.1](./change-logs/0-1-1-pure-skill-refactor.md) | 2026-04-13 | Pure skill refactor — invoke.js is now a context-preparation script; removed programmatic API |
 | [0.1.0](./change-logs/0-1-0-initial-release.md) | 2026-04-12 | First round optimization — 23 bugs, discrepancies, and optimizations resolved post-audit |
 

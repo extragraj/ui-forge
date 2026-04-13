@@ -34,6 +34,9 @@ node scripts/invoke.js --task "..." --refs ./ref.html --rescan
 # Force Stage 1 page plan regeneration
 node scripts/invoke.js --task "Convert page" --refs ./page.html --replan
 
+# Companion mode — variant generation from a props interface
+node scripts/invoke.js --task "Build pricing variant" --signal CONVERT_VARIANT --refs ./types.ts --output ./Variant.tsx
+
 # Sync version across all files after editing skill.version
 node scripts/sync-version.mjs
 ```
@@ -50,20 +53,24 @@ node scripts/sync-version.mjs
 ### Signal-based generation
 
 `detectSignals()` in `invoke.js` classifies refs and determines:
-- **Primary signal**: `CONVERT_SECTION` (default) or `CONVERT_PAGE` (>400 lines or task mentions "page")
+- **Primary signal**: `CONVERT_SECTION` (default), `CONVERT_PAGE` (>400 lines or task mentions "page"), or `CONVERT_VARIANT` (single interface file, no HTML/image layout refs)
 - **Modifiers**: `+CONFIG` (JSON/data ref present), `+IMAGE` (image ref present)
+- **Override**: `--signal` flag forces the primary signal, bypassing auto-detection
 
 `CONVERT_PAGE` triggers a **two-stage pipeline**:
 - Stage 1 — outputs page decomposition context; the AI writes `design/forge-page-plan.json`
 - Stage 2 — reads the plan, outputs per-section context; the AI generates each component file
 
+`CONVERT_VARIANT` generates a component body implementing an externally-owned props interface. Default mode is `body-only`. Mutually exclusive with `CONVERT_PAGE`. Never writes `forge-page-plan.json`.
+
 ### Context output format
 
-`invoke.js` prints one of three structured text blocks to stdout:
+`invoke.js` prints one of four structured text blocks to stdout:
 
 | Output | When |
 |--------|------|
 | `=== UI FORGE ===` | `CONVERT_SECTION` — single component context |
+| `=== UI FORGE ===` | `CONVERT_VARIANT` — variant context with `SIGNAL: CONVERT_VARIANT` header |
 | `=== UI FORGE — PAGE DECOMPOSITION (Stage 1) ===` | `CONVERT_PAGE`, no plan file yet |
 | `=== UI FORGE — PAGE GENERATION (Stage 2) ===` | `CONVERT_PAGE`, plan file exists |
 

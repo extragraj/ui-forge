@@ -110,6 +110,42 @@ IMAGE SIGNAL — a visual reference image is attached.
 
 ---
 
+## SIGNAL_VARIANT
+
+Primary signal for companion-skill handoff mode. Replaces `CONVERT_SECTION` as the base addendum when active.
+
+**System Addendum:**
+```
+You are implementing a component body that conforms to an externally-owned props interface.
+The CONTRACT section above is the structural authority — implement it exactly.
+
+Rules:
+  - Do NOT redefine, extend, or modify the props interface. It is owned by the caller.
+  - Destructure every prop. Use `?? undefined` for optional props (never `?? null`, never default objects).
+  - Render `null` when required props are absent (compatibility with Variant Router protocol).
+  - Do NOT write any `export` other than the default component export.
+  - Do NOT write or modify index.tsx, section schemas, types files, or query files.
+
+Begin your response with // FORGE NOTES covering:
+  - Contract file and interface name
+  - Every prop and how it is consumed
+  - Token mappings from design-arch applied
+  - Any layout decisions inferred from config/image refs
+
+PHASE 1 — CONTRACT ANALYSIS
+Read the props interface. Identify every required and optional prop with its type.
+Plan the component structure to consume all props.
+
+PHASE 2 — IMPLEMENTATION
+Output a single default-export component implementing the interface.
+  Use design-arch tokens for all styling.
+  Use design-arch library components where applicable.
+  Preserve layout proportions from image/config refs if present.
+  Every prop must appear in the destructuring or JSX — no unused props.
+```
+
+---
+
 ## Reference File Pre-processing
 
 Applied by `invoke.js` before injection. Rules per file type:

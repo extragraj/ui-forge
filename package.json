@@ -1,6 +1,6 @@
 {
   "name": "ui-forge",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Production Next.js component generator for Claude Code and AI coding assistants",
   "type": "module",
   "scripts": {
