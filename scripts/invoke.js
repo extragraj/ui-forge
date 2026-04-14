@@ -23,6 +23,7 @@
  *   --output    Target output file path (included in context for Claude to write)
  *   --signal    Force primary signal: CONVERT_SECTION, CONVERT_PAGE, CONVERT_VARIANT
  *   --mode      full (default) or body-only. body-only requires --output to point at an existing file
+ *   --a11y      Enable WCAG 2.1 AA enforcement (adds +A11Y modifier)
  *   --config    Load all params from a JSON file
  *   --rescan    Re-run scan.js before generating
  *   --replan    Force Stage 1 page plan regeneration
@@ -39,8 +40,41 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const PROJECT_ROOT = process.cwd()
 const ARCH_PATH = join(PROJECT_ROOT, 'design', 'design-arch.json')
 const PLAN_PATH = join(PROJECT_ROOT, 'design', 'forge-page-plan.json')
+const STACKSHIFT_MARKER = join(PROJECT_ROOT, '.stackshift', 'installed.json')
 const CLAUDE_SKILL_DIR = join(__dirname, '..')
 const DIVIDER = '─'.repeat(60)
+const DEFAULT_CONTRACT_VERSION = '1.0.0'
+const SUPPORTED_CONTRACT_VERSIONS = ['1.0.0']
+
+// ─── Paired mode ──────────────────────────────────────────────────────────────
+
+function detectPairedMode() {
+  if (!existsSync(STACKSHIFT_MARKER)) return null
+  try {
+    const marker = JSON.parse(readFileSync(STACKSHIFT_MARKER, 'utf-8'))
+    return {
+      installed: true,
+      version: marker.version ?? 'unknown',
+      a11yRequired: marker.a11yRequired === true,
+    }
+  } catch {
+    return { installed: true, version: 'unknown', a11yRequired: false }
+  }
+}
+
+// ─── Contract version ─────────────────────────────────────────────────────────
+
+function parseContractVersion(raw) {
+  if (!raw) return DEFAULT_CONTRACT_VERSION
+  const m = raw.match(/@contract-version\s+(\d+\.\d+\.\d+(?:-[\w.]+)?)/)
+  return m ? m[1] : DEFAULT_CONTRACT_VERSION
+}
+
+function parseInterfaceName(raw) {
+  if (!raw) return null
+  const m = raw.match(/(?:export\s+)?(?:interface|type)\s+(\w+)/)
+  return m ? m[1] : null
+}
 
 // ─── Design architecture ──────────────────────────────────────────────────────
 
@@ -297,7 +331,7 @@ function isInterfaceFile(ref) {
   return /(?:export\s+)?(?:interface|type)\s+\w+/.test(raw)
 }
 
-function detectSignals(task, classifiedRefs, explicitSignal) {
+function detectSignals(task, classifiedRefs, explicitSignal, opts = {}) {
   const t = task.toLowerCase()
   const byRole = classifiedRefs.reduce((acc, r) => {
     ;(acc[r.role] ??= []).push(r)
@@ -307,6 +341,7 @@ function detectSignals(task, classifiedRefs, explicitSignal) {
   const modifiers = [
     ...(byRole.config?.length ? ['CONFIG'] : []),
     ...(byRole.image?.length ? ['IMAGE'] : []),
+    ...(opts.a11y ? ['A11Y'] : []),
   ]
 
   // Explicit --signal override
@@ -456,7 +491,7 @@ function buildSectionContext({ task, archCtx, signals, standards, addendum, outp
   return lines.join('\n')
 }
 
-function buildVariantContext({ task, archCtx, signals, standards, addendum, output, mode }) {
+function buildVariantContext({ task, archCtx, signals, standards, addendum, output, mode, paired }) {
   const { byRole } = signals
 
   // Under CONVERT_VARIANT, the interface file is classified as 'config' by loadRefs
@@ -466,10 +501,20 @@ function buildVariantContext({ task, archCtx, signals, standards, addendum, outp
   const configRef = allConfigs.find(r => r !== interfaceRef)
   const imageRefs = byRole.image ?? []
 
+  // Parse contract metadata (contract version + interface name)
+  const rawInterface = interfaceRef?.rawLines?.join('\n') ?? interfaceRef?.content ?? ''
+  const contractVersion = parseContractVersion(rawInterface)
+  const interfaceName = parseInterfaceName(rawInterface)
+  const versionSupported = SUPPORTED_CONTRACT_VERSIONS.includes(contractVersion)
+
+  if (!versionSupported)
+    process.stderr.write(`ui-forge: WARNING — contract version ${contractVersion} not in supported list (${SUPPORTED_CONTRACT_VERSIONS.join(', ')}). Proceeding; AI will note in FORGE NOTES.\n`)
+
   const lines = []
   lines.push(`=== UI FORGE ===`)
   lines.push(`SIGNAL: CONVERT_VARIANT${signals.modifiers.length ? ' +' + signals.modifiers.join(' +') : ''}`)
   lines.push(`MODE: ${mode}`)
+  if (paired) lines.push(`PAIRED: stackshift ${paired.version}`)
   lines.push('')
   lines.push('TASK')
   lines.push(task)
@@ -482,6 +527,9 @@ function buildVariantContext({ task, archCtx, signals, standards, addendum, outp
   if (interfaceRef) {
     lines.push('')
     lines.push(`CONTRACT [${interfaceRef.path}]`)
+    lines.push(`  interface: ${interfaceName ?? '<unparsed>'}`)
+    lines.push(`  version: ${contractVersion}${versionSupported ? '' : ' (UNSUPPORTED — see WARNING in stderr)'}`)
+    lines.push('')
     lines.push(interfaceRef.content)
   }
 
@@ -632,6 +680,7 @@ ui-forge — Next.js component generator for Claude Code
   --output   Target output file path (Claude will write here)
   --signal   Force primary signal: CONVERT_SECTION, CONVERT_PAGE, CONVERT_VARIANT
   --mode     full (default) or body-only (requires --output to point at existing file)
+  --a11y     Enable WCAG 2.1 AA enforcement (adds +A11Y modifier)
   --config   Load all params from JSON file
   --rescan   Re-run scan.js before generating
   --replan   Force Stage 1 page plan regeneration
@@ -644,7 +693,7 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
   if (typeof params.refs === 'string')
     params.refs = params.refs.split(',').map(s => s.trim())
 
-  for (const flag of ['rescan', 'replan'])
+  for (const flag of ['rescan', 'replan', 'a11y'])
     if (params[flag] === 'true') params[flag] = true
 
   if (params.rescan) {
@@ -653,10 +702,20 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
   }
 
   const arch = loadDesignArch()
+  const paired = detectPairedMode()
+  const a11yRequired = Boolean(
+    params.a11y === true
+    || params.a11y === 'true'
+    || arch.a11yRequired === true
+    || (paired && paired.a11yRequired === true)
+  )
   const classifiedRefs = loadRefs(params.refs ?? [])
-  const signals = detectSignals(params.task, classifiedRefs, params.signal)
+  const signals = detectSignals(params.task, classifiedRefs, params.signal, { a11y: a11yRequired })
   const standards = loadDesignStandards(arch)
   const archCtx = archToContext(arch)
+
+  if (paired)
+    process.stderr.write(`ui-forge: paired-mode detected (stackshift ${paired.version})\n`)
 
   // Resolve mode: body-only is the default under CONVERT_VARIANT
   let mode = params.mode ?? (signals.primary === 'CONVERT_VARIANT' ? 'body-only' : 'full')
@@ -685,6 +744,7 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
       addendum,
       output: params.output,
       mode,
+      paired,
     }) + '\n')
     return
   }

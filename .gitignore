@@ -13,4 +13,4 @@ yarn-error.log*
 
 # Project-specific
 .agentic/
-.claude/
+.claude/settings.local.json

@@ -1,12 +1,16 @@
 ---
 name: ui-forge
-version: 0.1.2
+version: 0.1.3
 description: >
   Generates production-ready Next.js TSX components from prompts and reference
-  materials (HTML, TSX, images, JSON). Converts sections, pages, and variants
-  using project design standards. Triggers on: "create component", "convert
-  this HTML/TSX/page", "generate from image", or any frontend code generation
-  request. Requires design/design-arch.json (auto-created on first use).
+  materials (HTML, TSX, images, JSON). Works standalone for any Next.js project
+  AND as the StackShift companion for Sanity-backed sites — accepts an
+  externally-owned props interface as its contract. Converts sections, pages,
+  and variants using project design standards with anti-slop aesthetic
+  guardrails and optional WCAG 2.1 AA accessibility enforcement. Triggers on:
+  "create component", "convert this HTML/TSX/page", "generate from image",
+  "implement this variant", or any frontend code generation request. Requires
+  design/design-arch.json (auto-created on first use).
 ---
 
 # UI Forge
@@ -96,6 +100,7 @@ node .claude/skills/ui-forge/scripts/invoke.js --task "Convert page" --refs ./pa
 | `--output` | Target output file path (included in context) |
 | `--signal` | Force primary signal: `CONVERT_SECTION`, `CONVERT_PAGE`, `CONVERT_VARIANT`. Overrides auto-detection. |
 | `--mode` | `full` (default) or `body-only`. `body-only` requires `--output` to point at an existing file. Default is `body-only` when signal is `CONVERT_VARIANT`. |
+| `--a11y` | Enable `+A11Y` modifier — WCAG 2.1 AA enforcement. Auto-enabled when `arch.a11yRequired` or `.stackshift/installed.json` sets `a11yRequired: true`. |
 | `--rescan` | Re-run scan.js first |
 | `--replan` | Force Stage 1 re-run |
 | `--config` | Load all params from a JSON file |
@@ -113,6 +118,7 @@ node .claude/skills/ui-forge/scripts/invoke.js --task "Convert page" --refs ./pa
 **Modifiers (stackable):**
 - `+CONFIG` — JSON/data file present
 - `+IMAGE` — Image file present (read via vision capability)
+- `+A11Y` — WCAG 2.1 AA enforcement (semantic HTML, headings, labels, contrast, focus, reduced motion). Activate via `--a11y`, `a11y` in config JSON, `a11yRequired: true` in `design-arch.json`, or `a11yRequired: true` in `.stackshift/installed.json` (paired mode).
 
 **Signal composition:**
 - `CONVERT_VARIANT` is mutually exclusive with `CONVERT_PAGE` (never compose)
@@ -184,12 +190,49 @@ a props interface. In this mode:
 See the caller's workflow documentation for the exact CLI invocation.
 ui-forge is stateless — every invocation is self-contained.
 
+### Contract version tag (0.1.3+)
+
+Props interfaces may declare their contract version with a JSDoc tag:
+
+```ts
+/** @contract-version 1.0.0 */
+export interface PricingVariantProps {
+  title: string
+  tiers: { name: string; price: string }[]
+}
+```
+
+Absence defaults to `1.0.0`. UI Forge parses the tag, surfaces it in the
+`CONTRACT` header of the generation context, and warns on stderr when the
+version is not in its supported set.
+
+### Post-generation contract check (0.1.3+)
+
+After generating under `CONVERT_VARIANT`, run:
+
+```bash
+node .claude/skills/ui-forge/scripts/validate-contract.js \
+  ./components/Pricing/Variant.tsx \
+  ./components/Pricing/types.ts
+```
+
+The validator asserts: single default export, no disallowed named exports,
+contract imported (not redefined), all required props consumed, `null`
+fallback present, `?? undefined` used for optionals. Exit `1` on violations.
+
+### Paired-mode detection (0.1.3+)
+
+When `.stackshift/installed.json` exists, UI Forge logs the detected
+StackShift version to stderr, adds `PAIRED: stackshift x.y.z` to the output
+header, and honors the marker's `a11yRequired` field (auto-activates `+A11Y`).
+
 ## Advanced
 
 See `.claude/skills/ui-forge/references/` (adjust path to your install scope):
 - `advanced-usage.md` — Config files, custom signals, troubleshooting
 - `examples.md` — Real-world conversion examples
 - `prompt-patterns.md` — Signal composition patterns
+- `versions.md` — Node, Next.js, StackShift, component library compatibility matrix
 
 **Requires:** Node.js >=18
 **Consumed by (companion mode):** stackshift-workflow-skills >=0.1.5
