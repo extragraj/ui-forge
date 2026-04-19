@@ -30,7 +30,7 @@
  */
 
 import {
-  readFileSync, existsSync,
+  readFileSync, existsSync, statSync,
 } from 'fs'
 import { join, resolve, extname, basename, dirname } from 'path'
 import { fileURLToPath } from 'url'
@@ -42,6 +42,8 @@ const ARCH_PATH = join(PROJECT_ROOT, 'design', 'design-arch.json')
 const PLAN_PATH = join(PROJECT_ROOT, 'design', 'forge-page-plan.json')
 const STACKSHIFT_MARKER = join(PROJECT_ROOT, '.stackshift', 'installed.json')
 const CLAUDE_SKILL_DIR = join(__dirname, '..')
+const BUILTIN_STANDARDS_DIR = join(CLAUDE_SKILL_DIR, 'references', 'standards')
+const BUILTIN_STANDARD_KEYS = ['typography', 'spacing', 'color', 'a11y']
 const DIVIDER = '─'.repeat(60)
 const DEFAULT_CONTRACT_VERSION = '1.0.0'
 const SUPPORTED_CONTRACT_VERSIONS = ['1.0.0']
@@ -107,21 +109,78 @@ function loadDesignArch() {
   return arch
 }
 
-function loadDesignStandards(arch) {
+// Resolution order (last wins per key):
+//   1. arch.designStandards  — explicit, includes stackshiftComponentStandard
+//   2. PROJECT_ROOT/design/standards/<key>.md — project-local override
+//   3. CLAUDE_SKILL_DIR/references/standards/<key>.md — built-in fallback (gap-fill only)
+// Opt-out of step 3: pass opts.useBuiltins = false, or set
+// arch.designStandards._useBuiltins = false.
+function loadDesignStandards(arch, opts = {}) {
   const standards = {}
-  if (!arch.designStandards || Object.keys(arch.designStandards).length === 0) return null
-  for (const [key, path] of Object.entries(arch.designStandards)) {
+  const sources = {}  // key → 'arch' | 'project' | 'built-in'
+
+  // Step 1 — explicit arch entries
+  const archStandards = arch.designStandards ?? {}
+  for (const [key, path] of Object.entries(archStandards)) {
+    if (key.startsWith('_')) continue  // skip meta keys like _useBuiltins
     const fullPath = join(PROJECT_ROOT, path)
     if (existsSync(fullPath)) {
       standards[key] = readFileSync(fullPath, 'utf-8')
+      sources[key] = 'arch'
     } else {
       process.stderr.write(`Warning: Design standard not found: ${path}\n`)
     }
   }
-  return Object.keys(standards).length > 0 ? standards : null
+
+  // Step 2 — project-local override for standard keys we haven't filled yet
+  // (arch entry wins; this is a no-op for keys already present from step 1).
+  for (const key of BUILTIN_STANDARD_KEYS) {
+    if (standards[key]) continue
+    const projectPath = join(PROJECT_ROOT, 'design', 'standards', `${key}.md`)
+    if (existsSync(projectPath)) {
+      standards[key] = readFileSync(projectPath, 'utf-8')
+      sources[key] = 'project'
+    }
+  }
+
+  // Step 3 — built-in fallback (gap-fill only; non-empty templates only)
+  const useBuiltins = opts.useBuiltins !== false && archStandards._useBuiltins !== false
+  if (useBuiltins) {
+    for (const key of BUILTIN_STANDARD_KEYS) {
+      if (standards[key]) continue
+      const p = join(BUILTIN_STANDARDS_DIR, `${key}.md`)
+      if (!existsSync(p)) continue
+      const content = readFileSync(p, 'utf-8')
+      if (!isSubstantive(content)) continue  // empty template → skip
+      standards[key] = content
+      sources[key] = 'built-in'
+    }
+  }
+
+  if (Object.keys(standards).length === 0) return null
+  return { standards, sources }
 }
 
+// A standards file is "substantive" if, after stripping comments and blanks,
+// it contains at least one non-heading line with real guidance. Empty templates
+// that only carry HTML comments or headings are treated as placeholders and
+// skipped so they don't inject noise into the generation context.
+function isSubstantive(md) {
+  const stripped = md
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l && !l.startsWith('#'))
+  return stripped.length > 0
+}
+
+let _archContextCache = null
+let _archContextKey = null
 function archToContext(arch) {
+  // Cache keyed by _scanned timestamp so repeated builders reuse the same
+  // serialised context within a single process.
+  const key = arch._scanned ?? ''
+  if (_archContextKey === key && _archContextCache !== null) return _archContextCache
   const lines = []
   if (arch.componentLib?.length)
     lines.push(`componentLib: ${arch.componentLib.join(', ')}`)
@@ -139,7 +198,9 @@ function archToContext(arch) {
   if (arch.patterns?.typography) lines.push(`typography: ${arch.patterns.typography}`)
   if (arch.patterns?.conventions?.length)
     lines.push(`conventions:\n${arch.patterns.conventions.map(c => '- ' + c).join('\n')}`)
-  return lines.join('\n')
+  _archContextCache = lines.join('\n')
+  _archContextKey = key
+  return _archContextCache
 }
 
 // ─── Ref pre-processing ───────────────────────────────────────────────────────
@@ -248,6 +309,10 @@ function preprocessConfig(raw) {
 const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif'])
 const CONFIG_NAMES = /constants|config|mock|data|fixture/i
 
+// Cache classified refs within a process (helps CONVERT_PAGE Stage 2 where
+// sections may re-trigger preprocessing). Key: fullPath + ':' + mtimeMs.
+const _refCache = new Map()
+
 function loadRefs(refs = []) {
   const out = []
   for (const ref of refs) {
@@ -265,12 +330,24 @@ function loadRefs(refs = []) {
       continue
     }
 
+    let cacheKey
+    try {
+      cacheKey = `${full}:${statSync(full).mtimeMs}`
+      const cached = _refCache.get(cacheKey)
+      if (cached) { out.push({ ...cached, path: ref }); continue }
+    } catch { /* fall through to uncached read */ }
+
+    const push = entry => {
+      out.push(entry)
+      if (cacheKey) _refCache.set(cacheKey, entry)
+    }
+
     const raw = readFileSync(full, 'utf-8')
     const rawLines = raw.split('\n')
 
     if (ext === '.html') {
       const { content, stylingType } = preprocessHtml(raw)
-      out.push({ role: 'reference', path: ref, ext, content, rawLines, stylingType })
+      push({ role: 'reference', path: ref, ext, content, rawLines, stylingType })
       continue
     }
 
@@ -278,9 +355,9 @@ function loadRefs(refs = []) {
       const hasJSX = /return\s*\([\s\S]{0,200}<[A-Za-z]/.test(raw)
       if (hasJSX) {
         const { content, stylingType, strippedLogic } = preprocessTsx(raw)
-        out.push({ role: 'reference', path: ref, ext, content, rawLines, stylingType, strippedLogic })
+        push({ role: 'reference', path: ref, ext, content, rawLines, stylingType, strippedLogic })
       } else {
-        out.push({ role: 'config', path: ref, ext, content: preprocessConfig(raw), rawLines })
+        push({ role: 'config', path: ref, ext, content: preprocessConfig(raw), rawLines })
       }
       continue
     }
@@ -289,16 +366,16 @@ function loadRefs(refs = []) {
       const hasJSX = /return\s*\([\s\S]{0,200}<[A-Za-z]/.test(raw)
       const isConfig = CONFIG_NAMES.test(name) || !hasJSX
       if (isConfig) {
-        out.push({ role: 'config', path: ref, ext, content: preprocessConfig(raw), rawLines })
+        push({ role: 'config', path: ref, ext, content: preprocessConfig(raw), rawLines })
       } else {
         const { content, stylingType, strippedLogic } = preprocessTsx(raw)
-        out.push({ role: 'reference', path: ref, ext, content, rawLines, stylingType, strippedLogic })
+        push({ role: 'reference', path: ref, ext, content, rawLines, stylingType, strippedLogic })
       }
       continue
     }
 
     if (ext === '.json') {
-      out.push({ role: 'config', path: ref, ext, content: preprocessConfig(raw), rawLines })
+      push({ role: 'config', path: ref, ext, content: preprocessConfig(raw), rawLines })
       continue
     }
 
@@ -312,7 +389,7 @@ function loadRefs(refs = []) {
         content = lines.slice(0, 100).join('\n')
           + (headings ? `\n\n// SECTION HEADINGS (truncated content):\n${headings}` : '\n...')
       }
-      out.push({ role: 'companion', path: ref, ext, content, rawLines })
+      push({ role: 'companion', path: ref, ext, content, rawLines })
       continue
     }
   }
@@ -421,13 +498,16 @@ function loadComposedAddendum(signals) {
 
 // ─── Context output builders ──────────────────────────────────────────────────
 
-function appendStandards(lines, standards) {
-  if (!standards) return
+function appendStandards(lines, standardsResult) {
+  if (!standardsResult) return
+  const { standards, sources } = standardsResult
   for (const [key, content] of Object.entries(standards)) {
     if (content.length > 3000)
       process.stderr.write(`ui-forge: Warning — design standard "${key}" truncated to 3000 chars (${content.length} total). Consider splitting into focused sections.\n`)
+    const source = sources?.[key] ?? 'arch'
     lines.push('')
     lines.push(`// --- STANDARD: ${key} ---`)
+    lines.push(`# source: ${source}`)
     lines.push(content.slice(0, 3000))
   }
 }
@@ -681,6 +761,7 @@ ui-forge — Next.js component generator for Claude Code
   --signal   Force primary signal: CONVERT_SECTION, CONVERT_PAGE, CONVERT_VARIANT
   --mode     full (default) or body-only (requires --output to point at existing file)
   --a11y     Enable WCAG 2.1 AA enforcement (adds +A11Y modifier)
+  --no-default-standards  Skip built-in fallback standards (arch + project only)
   --config   Load all params from JSON file
   --rescan   Re-run scan.js before generating
   --replan   Force Stage 1 page plan regeneration
@@ -693,8 +774,10 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
   if (typeof params.refs === 'string')
     params.refs = params.refs.split(',').map(s => s.trim())
 
-  for (const flag of ['rescan', 'replan', 'a11y'])
+  for (const flag of ['rescan', 'replan', 'a11y', 'no-default-standards'])
     if (params[flag] === 'true') params[flag] = true
+  // Normalise kebab-case flag → camelCase for internal use
+  if (params['no-default-standards']) params.noDefaultStandards = true
 
   if (params.rescan) {
     process.stderr.write('ui-forge: re-scanning project...\n')
@@ -711,7 +794,7 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
   )
   const classifiedRefs = loadRefs(params.refs ?? [])
   const signals = detectSignals(params.task, classifiedRefs, params.signal, { a11y: a11yRequired })
-  const standards = loadDesignStandards(arch)
+  const standards = loadDesignStandards(arch, { useBuiltins: !params.noDefaultStandards })
   const archCtx = archToContext(arch)
 
   if (paired)

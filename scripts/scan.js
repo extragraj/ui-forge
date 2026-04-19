@@ -8,7 +8,13 @@
  * Usage:
  *   node ${CLAUDE_SKILL_DIR}/scripts/scan.js
  *   node ${CLAUDE_SKILL_DIR}/scripts/scan.js --project-root /path/to/project
- *   node ${CLAUDE_SKILL_DIR}/scripts/scan.js --patch          (re-scan everything, preserve existing designStandards entries)
+ *   node ${CLAUDE_SKILL_DIR}/scripts/scan.js --patch                    (re-scan everything, preserve existing designStandards entries)
+ *   node ${CLAUDE_SKILL_DIR}/scripts/scan.js --quick                    (skip claude CLI synthesis; static analysis only)
+ *   node ${CLAUDE_SKILL_DIR}/scripts/scan.js --ignore ./extra.ignore    (load an additional ignore file; repeatable)
+ *   node ${CLAUDE_SKILL_DIR}/scripts/scan.js --no-default-ignore        (skip the built-in base ignore list)
+ *
+ * Ignore precedence (last wins on conflict):
+ *   built-in base → .gitignore → .agentic.ignore → .claude.ignore → .forgeignore → --ignore <file>
  *
  * AI synthesis strategy (in priority order, first available wins):
  *   1. claude CLI  — works in Claude Code without an API key
@@ -16,7 +22,7 @@
  */
 
 import {
-  readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync,
+  readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync,
 } from 'fs'
 import { join, relative, extname } from 'path'
 import { spawnSync } from 'child_process'
@@ -24,53 +30,156 @@ import { spawnSync } from 'child_process'
 const args = process.argv.slice(2)
 const flag = k => args.includes(k)
 const flagVal = k => { const i = args.indexOf(k); return i !== -1 ? args[i + 1] : null }
+const flagValAll = k => {
+  const out = []
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === k && args[i + 1] != null) out.push(args[i + 1])
+  }
+  return out
+}
 
 const PROJECT_ROOT = flagVal('--project-root') ?? process.cwd()
 const PATCH_MODE = flag('--patch')
+const QUICK_MODE = flag('--quick')
+const NO_DEFAULT_IGNORE = flag('--no-default-ignore')
+const EXTRA_IGNORE_FILES = flagValAll('--ignore')
 const OUT_DIR = join(PROJECT_ROOT, 'design')
 const OUT_FILE = join(OUT_DIR, 'design-arch.json')
 const COMPONENT_USAGE_FILE = join(OUT_DIR, 'component-usage.json')
 
-// ─── Ignore patterns ──────────────────────────────────────────────────────────
+// ─── Ignore patterns (gitignore-subset matcher) ───────────────────────────────
+//
+// Pattern object shape:
+//   { raw, negate, anchored, dirOnly, regex }
+//
+// Supported syntax:
+//   #comment, blank         — skipped
+//   /pattern                — anchored to project root
+//   pattern/                — matches directories only
+//   !pattern                — negation (re-include)
+//   **                      — depth-wildcard (zero or more path segments)
+//   *                       — single-segment wildcard
+//   ?                       — single char
 
-function loadIgnorePatterns() {
-  const base = [
-    'node_modules', '.git', '.next', 'dist', 'build', 'out', '.turbo',
-    'coverage', '.cache', 'public', 'static', 'design', '.agentic', '.claude',
-  ]
-  for (const f of ['.claude.ignore', '.agentic.ignore', '.gitignore']) {
-    const p = join(PROJECT_ROOT, f)
-    if (!existsSync(p)) continue
-    readFileSync(p, 'utf-8').split('\n').forEach(line => {
-      const l = line.trim()
-      if (l && !l.startsWith('#')) base.push(l.replace(/\/$/, '').replace(/^\//, ''))
-    })
+const BASE_PATTERNS_RAW = [
+  'node_modules/', '.git/', '.next/', 'dist/', 'build/', 'out/', '.turbo/',
+  'coverage/', '.cache/', 'public/', 'static/', 'design/', '.agentic/', '.claude/',
+]
+
+function compilePattern(raw) {
+  let pat = raw.trim()
+  if (!pat || pat.startsWith('#')) return null
+
+  const negate = pat.startsWith('!')
+  if (negate) pat = pat.slice(1)
+
+  const dirOnly = pat.endsWith('/')
+  if (dirOnly) pat = pat.slice(0, -1)
+
+  const anchored = pat.startsWith('/')
+  if (anchored) pat = pat.slice(1)
+
+  // If the pattern contains no unescaped `/` (other than the leading one we stripped),
+  // it should match at any depth — prefix with "**/".
+  const hasSlash = pat.includes('/')
+  if (!anchored && !hasSlash) pat = '**/' + pat
+
+  // Build regex: escape regex metachars, then expand glob tokens.
+  // Use placeholders for **, *, ? so escaping doesn't clobber them.
+  const DOUBLESTAR = '\x00DS\x00'
+  const STAR = '\x00S\x00'
+  const QMARK = '\x00Q\x00'
+
+  let re = pat
+    .replace(/\*\*/g, DOUBLESTAR)
+    .replace(/\*/g, STAR)
+    .replace(/\?/g, QMARK)
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    // `**/` at the start or between slashes → zero or more segments (including none)
+    .replace(new RegExp(`${DOUBLESTAR}/`, 'g'), '(?:.*/)?')
+    // trailing or standalone `**`  → zero or more of anything
+    .replace(new RegExp(DOUBLESTAR, 'g'), '.*')
+    // `*` → any chars except `/`
+    .replace(new RegExp(STAR, 'g'), '[^/]*')
+    // `?` → single char except `/`
+    .replace(new RegExp(QMARK, 'g'), '[^/]')
+
+  return {
+    raw,
+    negate,
+    anchored,
+    dirOnly,
+    regex: new RegExp('^' + re + '$'),
   }
-  return [...new Set(base)]
 }
 
-function isIgnored(rel, patterns) {
-  return patterns.some(p =>
-    rel === p || rel.startsWith(p + '/') || rel.includes('/' + p + '/') || rel.endsWith('/' + p)
-  )
+function loadIgnorePatterns() {
+  const patterns = []
+
+  if (!NO_DEFAULT_IGNORE) {
+    for (const p of BASE_PATTERNS_RAW) {
+      const c = compilePattern(p)
+      if (c) patterns.push(c)
+    }
+  }
+
+  const files = ['.gitignore', '.agentic.ignore', '.claude.ignore', '.forgeignore']
+  for (const f of files) {
+    const p = join(PROJECT_ROOT, f)
+    if (!existsSync(p)) continue
+    for (const line of readFileSync(p, 'utf-8').split('\n')) {
+      const c = compilePattern(line)
+      if (c) patterns.push(c)
+    }
+  }
+
+  for (const extra of EXTRA_IGNORE_FILES) {
+    const p = extra.startsWith('/') || /^[A-Za-z]:[\\/]/.test(extra)
+      ? extra : join(PROJECT_ROOT, extra)
+    if (!existsSync(p)) {
+      process.stderr.write(`  --ignore file not found: ${p}\n`)
+      continue
+    }
+    for (const line of readFileSync(p, 'utf-8').split('\n')) {
+      const c = compilePattern(line)
+      if (c) patterns.push(c)
+    }
+  }
+
+  return patterns
+}
+
+// Match a POSIX-style relative path against the compiled pattern list.
+// Last matching pattern wins (negation re-includes).
+function isIgnored(rel, isDir, patterns) {
+  const posix = rel.split(/[\\/]/).join('/')
+  let ignored = false
+  for (const p of patterns) {
+    if (p.dirOnly && !isDir) continue
+    if (!p.regex.test(posix)) continue
+    ignored = !p.negate
+  }
+  return ignored
 }
 
 // ─── Source file collector ────────────────────────────────────────────────────
+
+const SOURCE_EXTS = new Set(['.ts', '.tsx', '.js', '.jsx'])
 
 function collectSourceFiles(ignorePatterns) {
   const files = []
   function walk(dir) {
     let entries
-    try { entries = readdirSync(dir) }
+    try { entries = readdirSync(dir, { withFileTypes: true }) }
     catch (e) { process.stderr.write(`  skipped dir ${dir}: ${e.message}\n`); return }
     for (const entry of entries) {
-      const full = join(dir, entry)
+      const full = join(dir, entry.name)
       const rel = relative(PROJECT_ROOT, full)
-      if (isIgnored(rel, ignorePatterns)) continue
-      try {
-        if (statSync(full).isDirectory()) { walk(full); continue }
-        if (['.ts', '.tsx', '.js', '.jsx'].includes(extname(full))) files.push(full)
-      } catch (e) { process.stderr.write(`  skipped ${full}: ${e.message}\n`) }
+      const isDir = entry.isDirectory()
+      // Prune at directory boundary — avoids descending into ignored dirs
+      if (isIgnored(rel, isDir, ignorePatterns)) continue
+      if (isDir) { walk(full); continue }
+      if (entry.isFile() && SOURCE_EXTS.has(extname(entry.name))) files.push(full)
     }
   }
   walk(PROJECT_ROOT)
@@ -79,13 +188,13 @@ function collectSourceFiles(ignorePatterns) {
 
 // ─── Import scanner ───────────────────────────────────────────────────────────
 
+// Hoisted at module load — no per-call reassignment
+const FROM_RE = /from\s+['"](@?[\w][\w\-\/\.]*)['"]/g
+const NAMED_RE = /import\s*\{([^}]+)\}\s*from\s*['"](@[\w\-]+\/[\w\-\/\.]+|[@~#]\/[\w\-\/\.]+)['"]/g
+
 function scanImports(files) {
   const pkgCount = {}
   const componentSet = new Set()
-  // Match: from 'pkg' or from "@scope/pkg"
-  const fromRe = /from\s+['"](@?[\w][\w\-\/\.]*)['"]/g
-  // Named imports from component lib (scoped packages and path-alias local directories)
-  const namedRe = /import\s*\{([^}]+)\}\s*from\s*['"](@[\w\-]+\/[\w\-\/\.]+|[@~#]\/[\w\-\/\.]+)['"]/g
 
   for (const file of files) {
     let src
@@ -93,17 +202,16 @@ function scanImports(files) {
     catch (e) { process.stderr.write(`  skipped ${file}: ${e.message}\n`); continue }
 
     let m
-    fromRe.lastIndex = 0
-    while ((m = fromRe.exec(src)) !== null) {
+    FROM_RE.lastIndex = 0
+    while ((m = FROM_RE.exec(src)) !== null) {
       const pkg = m[1]
       if (pkg.startsWith('.') || pkg.startsWith('@/') || pkg.startsWith('~')) continue
       const root = pkg.startsWith('@') ? pkg.split('/').slice(0, 2).join('/') : pkg.split('/')[0]
       pkgCount[root] = (pkgCount[root] || 0) + 1
     }
 
-    namedRe.lastIndex = 0
-    while ((m = namedRe.exec(src)) !== null) {
-      // Only collect from the primary component lib
+    NAMED_RE.lastIndex = 0
+    while ((m = NAMED_RE.exec(src)) !== null) {
       m[1].split(',').forEach(s => {
         const name = s.trim().replace(/\s+as\s+\w+/, '').trim()
         if (name) componentSet.add(name)
@@ -169,12 +277,7 @@ function generateComponentUsageDict(componentSet, files) {
 
 // ─── Library resolver ─────────────────────────────────────────────────────────
 
-function resolveLibraries(pkgCount) {
-  const pkgJson = join(PROJECT_ROOT, 'package.json')
-  const allDeps = existsSync(pkgJson)
-    ? (() => { try { const p = JSON.parse(readFileSync(pkgJson, 'utf-8')); return { ...p.dependencies, ...p.devDependencies } } catch { return {} } })()
-    : {}
-
+function resolveLibraries(pkgCount, allDeps) {
   // Skip: framework, build tools, type packages, common utilities
   const skipPrefixes = [
     'react', 'next', '@types', 'typescript', 'eslint', 'prettier',
@@ -244,8 +347,20 @@ function findDesignStandards(isStackShift) {
     }
   }
 
-  // User can add more standards to design/standards/ directory
-  // We don't auto-detect those - user edits design-arch.json manually
+  // Auto-register project-local standards shipped under design/standards/*.md.
+  // Keys are the file basename (e.g. typography.md → "typography"). Existing
+  // entries (including stackshiftComponentStandard above) are not overwritten.
+  const standardsDir = join(PROJECT_ROOT, 'design', 'standards')
+  if (existsSync(standardsDir)) {
+    try {
+      for (const entry of readdirSync(standardsDir, { withFileTypes: true })) {
+        if (!entry.isFile() || !entry.name.endsWith('.md')) continue
+        const key = entry.name.replace(/\.md$/, '')
+        if (standards[key]) continue
+        standards[key] = `./design/standards/${entry.name}`
+      }
+    } catch {}
+  }
 
   return standards
 }
@@ -289,6 +404,10 @@ function staticFallback(pkgCount) {
 }
 
 function synthesize(payload, pkgCount) {
+  if (QUICK_MODE) {
+    process.stderr.write('  --quick mode — skipping claude CLI synthesis\n')
+    return staticFallback(pkgCount)
+  }
   return tryClaudeCLI(payload) ?? staticFallback(pkgCount)
 }
 
@@ -301,8 +420,14 @@ function main() {
   const files = collectSourceFiles(ignore)
   process.stderr.write(`  ${files.length} source files found\n`)
 
+  // Read package.json once here; pass into resolveLibraries.
+  const pkgJsonPath = join(PROJECT_ROOT, 'package.json')
+  const allDeps = existsSync(pkgJsonPath)
+    ? (() => { try { const p = JSON.parse(readFileSync(pkgJsonPath, 'utf-8')); return { ...p.dependencies, ...p.devDependencies } } catch { return {} } })()
+    : {}
+
   const { pkgCount, usedComponents } = scanImports(files)
-  const usedLibraries = resolveLibraries(pkgCount)
+  const usedLibraries = resolveLibraries(pkgCount, allDeps)
   const tailwind = readTailwindConfig()
   const globalCss = readGlobalCss()
   const claudeMd = readClaudeMd()
@@ -323,9 +448,14 @@ function main() {
     try { existing = JSON.parse(readFileSync(OUT_FILE, 'utf-8')) } catch {}
   }
 
-  // Discover component directories and design standards
+  // Discover component directories and design standards.
+  // In patch mode we preserve existing designStandards entries verbatim, but
+  // still auto-register any newly-added design/standards/*.md files.
   const componentDirs = discoverComponentDirectories()
-  const designStandards = existing.designStandards ?? findDesignStandards(s.isStackShift)
+  const discovered = findDesignStandards(s.isStackShift)
+  const designStandards = PATCH_MODE && existing.designStandards
+    ? { ...discovered, ...existing.designStandards }
+    : discovered
 
   const arch = {
     ...existing,
@@ -337,7 +467,7 @@ function main() {
     usedLibraries,
     tailwind: tailwind ? { themeSection: tailwind.themeSection, colorTokens: s.colorTokens } : null,
     globalCss: globalCss ? globalCss.slice(0, 2000) : null,
-    designStandards,  // New field (object, user-extensible)
+    designStandards,  // object keyed by standard name → relative path
     patterns: {
       ...(existing.patterns ?? {}),
       spacing: s.spacing,

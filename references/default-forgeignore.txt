@@ -1,0 +1,65 @@
+# .forgeignore — UI Forge scan exclude patterns
+# ------------------------------------------------------------------------------
+# This is a TEMPLATE. It ships empty by default so UI Forge doesn't silently
+# exclude files the target project cares about. Copy this file to the ROOT of
+# the project you're scanning (as `.forgeignore`) and uncomment / add patterns
+# to shape what scan.js walks into.
+#
+# HOW TO USE
+# ------------------------------------------------------------------------------
+#   1. Copy this file to the project root:
+#        cp .claude/skills/ui-forge/references/default-forgeignore.txt .forgeignore
+#   2. Uncomment lines below that apply to your project, or add your own.
+#   3. Re-run: node .claude/skills/ui-forge/scripts/scan.js
+#
+# You can also use an extra file anywhere, loaded via --ignore:
+#        node .claude/skills/ui-forge/scripts/scan.js --ignore ./configs/ci.ignore
+#
+# PRECEDENCE (last wins on conflict)
+# ------------------------------------------------------------------------------
+#   built-in base → .gitignore → .agentic.ignore → .claude.ignore → .forgeignore → --ignore <file>
+#
+# The built-in base already excludes:
+#   node_modules/, .git/, .next/, dist/, build/, out/, .turbo/, coverage/,
+#   .cache/, public/, static/, design/, .agentic/, .claude/
+# Pass --no-default-ignore to scan.js to opt out of the built-in base.
+#
+# SYNTAX (gitignore subset)
+# ------------------------------------------------------------------------------
+#   #comment            skipped
+#   pattern             matches at any depth
+#   /pattern            anchored to project root
+#   pattern/            directories only
+#   !pattern            negation — re-include after a broader exclude
+#   **                  zero or more path segments
+#   *                   any chars except /
+#   ?                   single char except /
+#
+# ==============================================================================
+# SUGGESTED EXTRAS — uncomment what you want excluded
+# ==============================================================================
+
+# storybook-static/
+# .vercel/
+# cypress/videos/
+# cypress/screenshots/
+# playwright-report/
+# test-results/
+
+# **/__snapshots__/
+# **/*.stories.tsx
+# **/*.stories.ts
+# **/*.stories.jsx
+# **/*.stories.js
+
+# **/*.test.ts
+# **/*.test.tsx
+# **/*.spec.ts
+# **/*.spec.tsx
+
+# e2e/
+# .husky/
+# .changeset/
+
+# Re-include example (keep one story file even though **/*.stories.tsx is ignored):
+# !components/MyShowcase.stories.tsx

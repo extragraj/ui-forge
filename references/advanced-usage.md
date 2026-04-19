@@ -315,6 +315,151 @@ For each MUI component:
     node scripts/invoke.js --task "Convert hero" --refs ./hero.html
 ```
 
+## Ignore files and scan filtering (0.1.4+)
+
+`scripts/scan.js` filters project traversal with a gitignore-subset matcher.
+
+### Supported syntax
+
+| Syntax | Meaning |
+|--------|---------|
+| `pattern` | Match at any depth |
+| `/pattern` | Anchor to project root |
+| `pattern/` | Directories only |
+| `!pattern` | Negation (re-include after a broader exclude) |
+| `**` | Zero or more path segments |
+| `*` | Any chars except `/` |
+| `?` | Single char except `/` |
+| `#comment` | Skipped |
+
+### Precedence
+
+Last match on a given path wins:
+
+```
+built-in base → .gitignore → .agentic.ignore → .claude.ignore → .forgeignore → --ignore <file>
+```
+
+Built-in base excludes: `node_modules/`, `.git/`, `.next/`, `dist/`, `build/`,
+`out/`, `.turbo/`, `coverage/`, `.cache/`, `public/`, `static/`, `design/`,
+`.agentic/`, `.claude/`.
+
+Opt out with `--no-default-ignore`.
+
+### `.forgeignore`
+
+Skill-owned ignore file, lives at project root. Same syntax as above.
+A copy-paste template ships at `references/default-forgeignore.txt` — it is
+intentionally empty so UI Forge never silently excludes project files.
+
+```bash
+# Seed the template into your project and edit
+cp .claude/skills/ui-forge/references/default-forgeignore.txt .forgeignore
+```
+
+### Ad-hoc extra files
+
+```bash
+node scripts/scan.js --ignore ./configs/ci.ignore --ignore ./configs/legacy.ignore
+```
+
+`--ignore` is repeatable. Files can be relative (resolved against the project
+root) or absolute.
+
+### Directory-boundary pruning
+
+When a directory matches an ignore pattern, the walker does not descend. On
+projects with large `node_modules/`, this removes the bulk of syscalls.
+
+### Example
+
+`.forgeignore`:
+
+```
+# Exclude all stories except my reference one
+**/*.stories.tsx
+!components/Showcase.stories.tsx
+
+# Ignore local fixtures only
+/tests/fixtures/
+
+# But keep contract fixtures
+!/tests/fixtures/contracts/
+```
+
+## Built-in design standards (0.1.4+)
+
+UI Forge can gap-fill four canonical standard slots when the project has not
+authored its own: `typography`, `spacing`, `color`, `a11y`.
+
+### Resolution order (last wins per key)
+
+1. `arch.designStandards[key]` — explicit entry in `design-arch.json`.
+   Includes `stackshiftComponentStandard` and any `_`-prefixed meta keys
+   (those are ignored by the loader).
+2. `PROJECT_ROOT/design/standards/<key>.md` — auto-registered on scan.
+3. `CLAUDE_SKILL_DIR/references/standards/<key>.md` — built-in fallback.
+
+### Adding project standards
+
+Two patterns, both auto-detected:
+
+**A — one file per slot** (matches the built-in structure):
+
+```
+design/standards/
+├── typography.md
+├── spacing.md
+├── color.md
+└── a11y.md
+```
+
+Scan auto-registers each `*.md` file using the filename as the key. Re-run
+`scripts/scan.js` after adding.
+
+**B — custom keys via `design-arch.json`**:
+
+```json
+{
+  "designStandards": {
+    "componentGuide": "./docs/component-guide.md",
+    "motion": "./design/motion.md"
+  }
+}
+```
+
+Paths are resolved relative to the project root. Custom keys are additive.
+
+### Opt-outs
+
+- CLI: `node scripts/invoke.js --no-default-standards ...`
+- Config JSON: `{ "no-default-standards": true }`
+- Arch file: `{ "designStandards": { "_useBuiltins": false, ... } }`
+
+### Source markers
+
+Each injected block emits a source line so the AI can reason about authority:
+
+```
+// --- STANDARD: typography ---
+# source: built-in
+<...content...>
+```
+
+`source` is one of `arch`, `project`, `built-in`.
+
+### Filling in a built-in template
+
+The four templates in `references/standards/` ship empty (headings + HTML
+comments only). A helper, `isSubstantive()`, skips any template whose body is
+only comments / headings — so empty slots contribute nothing to context.
+
+To ship opinionated defaults from this skill, edit the template in place and
+make sure it contains at least one prose line outside comments. Keep each
+under ~3,000 characters — the injector truncates past that and warns.
+
+See `references/standards/README.md` for the full table.
+
 ## Advanced Signal Patterns
 
 ### Custom Signal Addition

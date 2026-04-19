@@ -1,6 +1,6 @@
 ---
 name: ui-forge
-version: 0.1.3
+version: 0.1.4
 description: >
   Generates production-ready Next.js TSX components from prompts and reference
   materials (HTML, TSX, images, JSON). Works standalone for any Next.js project
@@ -101,9 +101,20 @@ node .claude/skills/ui-forge/scripts/invoke.js --task "Convert page" --refs ./pa
 | `--signal` | Force primary signal: `CONVERT_SECTION`, `CONVERT_PAGE`, `CONVERT_VARIANT`. Overrides auto-detection. |
 | `--mode` | `full` (default) or `body-only`. `body-only` requires `--output` to point at an existing file. Default is `body-only` when signal is `CONVERT_VARIANT`. |
 | `--a11y` | Enable `+A11Y` modifier — WCAG 2.1 AA enforcement. Auto-enabled when `arch.a11yRequired` or `.stackshift/installed.json` sets `a11yRequired: true`. |
+| `--no-default-standards` | Skip built-in fallback standards (arch + project only). Also honoured by `"_useBuiltins": false` in `arch.designStandards`. |
 | `--rescan` | Re-run scan.js first |
 | `--replan` | Force Stage 1 re-run |
 | `--config` | Load all params from a JSON file |
+
+**Scan-only flags** (`scripts/scan.js`):
+
+| Flag | Description |
+|------|-------------|
+| `--project-root <path>` | Scan a different directory (defaults to cwd) |
+| `--patch` | Re-scan everything, preserve existing `designStandards` entries |
+| `--quick` | Skip the `claude` CLI synthesis branch (static analysis only) |
+| `--ignore <file>` | Load an additional ignore file (repeatable) |
+| `--no-default-ignore` | Skip the built-in base ignore list |
 
 ## Signals
 
@@ -225,6 +236,59 @@ fallback present, `?? undefined` used for optionals. Exit `1` on violations.
 When `.stackshift/installed.json` exists, UI Forge logs the detected
 StackShift version to stderr, adds `PAIRED: stackshift x.y.z` to the output
 header, and honors the marker's `a11yRequired` field (auto-activates `+A11Y`).
+
+### Ignore files (0.1.4+)
+
+`scripts/scan.js` reads ignore patterns with gitignore-subset syntax
+(globstar `**`, leading `/` anchor, trailing `/` dir-only, `!` negation, `#`
+comments). Precedence, last wins on conflict:
+
+```
+built-in base → .gitignore → .agentic.ignore → .claude.ignore → .forgeignore → --ignore <file>
+```
+
+**`.forgeignore`** lives at the project root (same level as `.gitignore`). A
+copy-paste template ships at `references/default-forgeignore.txt` — it's empty
+by default so no files are silently excluded.
+
+```bash
+# Copy template into a project, then uncomment patterns
+cp .claude/skills/ui-forge/references/default-forgeignore.txt .forgeignore
+```
+
+Custom paths via `--ignore ./path/to/file` (repeatable). Skip the built-in
+base list with `--no-default-ignore`.
+
+Directory-boundary pruning is applied — if a directory matches an ignore
+pattern the walker does not descend into it at all.
+
+### Built-in design standards (0.1.4+)
+
+UI Forge can gap-fill the four canonical standard slots from skill-owned
+templates when the target project hasn't authored its own. Resolution order
+(last wins per key):
+
+1. **`arch.designStandards`** — explicit. Includes `stackshiftComponentStandard`.
+2. **Project override** — `PROJECT_ROOT/design/standards/<key>.md`, auto-registered by `scan.js`.
+3. **Built-in fallback** — `references/standards/<key>.md` (gap-fill only).
+
+Slots: `typography`, `spacing`, `color`, `a11y`. Templates ship **empty**
+(headings + HTML comments only) — the loader skips any template whose body is
+comments / headings, so a fresh install behaves exactly like 0.1.3.
+
+Each injected standard block emits a source marker:
+
+```
+// --- STANDARD: typography ---
+# source: built-in
+...content...
+```
+
+**Opt-out:** `--no-default-standards` on `invoke.js`, or add
+`"_useBuiltins": false` inside `arch.designStandards`.
+
+**Extending:** see `references/standards/README.md` for the full table and
+guidance on filling in slots or adding custom ones.
 
 ## Advanced
 

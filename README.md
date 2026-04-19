@@ -4,7 +4,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org)
 [![Skills Compatible](https://img.shields.io/badge/skills-compatible-blue)](https://github.com/vercel/skills-cli)
 
-> **Version** 0.1.3
+> **Version** 0.1.4
 
 Next.js component generator for Claude Code and AI coding assistants. Converts HTML, TSX, images, and JSON reference materials into production-ready components that match your project's existing design system — using your actual component libraries, Tailwind tokens, and coding conventions.
 
@@ -315,9 +315,20 @@ the FORGE NOTES `A11Y` sub-block as judgment calls.
 | `--signal` | Force primary signal: `CONVERT_SECTION`, `CONVERT_PAGE`, `CONVERT_VARIANT` |
 | `--mode` | `full` (default) or `body-only`. Default is `body-only` under `CONVERT_VARIANT`. |
 | `--a11y` | Enable `+A11Y` modifier (WCAG 2.1 AA enforcement) |
+| `--no-default-standards` | Skip built-in fallback standards (arch + project only) |
 | `--rescan` | Re-run `scan.js` before generating |
 | `--replan` | Force Stage 1 page plan regeneration |
 | `--config` | Load all params from a JSON file |
+
+**Scan-only flags** (`scripts/scan.js`):
+
+| Flag | Description |
+|------|-------------|
+| `--project-root <path>` | Scan a different directory (defaults to cwd) |
+| `--patch` | Re-scan everything, preserve existing `designStandards` entries |
+| `--quick` | Skip the `claude` CLI synthesis branch (static analysis only) |
+| `--ignore <file>` | Load an additional ignore file (repeatable) |
+| `--no-default-ignore` | Skip the built-in base ignore list |
 
 ## Changelog
 
@@ -325,6 +336,7 @@ Full release notes are in [`change-logs/`](./change-logs/).
 
 | Version | Date | Notes |
 |---------|------|-------|
+| [0.1.4](./change-logs/0-1-4-ignore-and-defaults.md) | 2026-04-20 | `.forgeignore` + gitignore-subset matcher, directory-boundary pruning, `--ignore` / `--no-default-ignore` / `--quick` / `--no-default-standards` flags, three-layer `loadDesignStandards` with built-in template fallbacks |
 | [0.1.3](./change-logs/0-1-3-contract-hardening-and-a11y.md) | 2026-04-14 | Contract hardening — `@contract-version` tag, CONTRACT header + FORGE NOTES sub-block, `validate-contract.js`, `+A11Y` modifier, anti-slop guardrail, paired-mode detection |
 | [0.1.2](./change-logs/0-1-2-companion-mode.md) | 2026-04-14 | Companion mode — `CONVERT_VARIANT` signal, `--signal` and `--mode` flags, body-only output, page-pipeline guard |
 | [0.1.1](./change-logs/0-1-1-pure-skill-refactor.md) | 2026-04-13 | Pure skill refactor — invoke.js is now a context-preparation script; removed programmatic API |
