@@ -1,0 +1,34 @@
+{
+  "_theme": "shadcn",
+  "_description": "Tailwind + shadcn/ui primitives. Radix primitives under the hood, class-variance-authority for variants, tailwind-merge + clsx for className composition.",
+  "componentLib": ["./components/ui", "./components"],
+  "usedComponents": [
+    "Button", "Card", "CardHeader", "CardContent", "CardFooter", "CardTitle", "CardDescription",
+    "Input", "Label", "Textarea", "Select", "SelectContent", "SelectItem", "SelectTrigger", "SelectValue",
+    "Dialog", "DialogContent", "DialogHeader", "DialogTitle", "DialogTrigger",
+    "Sheet", "SheetContent", "SheetTrigger",
+    "Tabs", "TabsContent", "TabsList", "TabsTrigger",
+    "Badge", "Separator", "Avatar", "AvatarFallback", "AvatarImage",
+    "Accordion", "AccordionContent", "AccordionItem", "AccordionTrigger"
+  ],
+  "usedLibraries": [
+    { "name": "class-variance-authority", "version": "^0.7.0", "uses": 1 },
+    { "name": "clsx", "version": "^2.0.0", "uses": 1 },
+    { "name": "tailwind-merge", "version": "^2.0.0", "uses": 1 },
+    { "name": "lucide-react", "version": "^0.400.0", "uses": 1 }
+  ],
+  "tailwind": {
+    "colorTokens": "background, foreground, card, popover, primary, secondary, muted, accent, destructive, border, input, ring"
+  },
+  "patterns": {
+    "spacing": "Container: px-4 md:px-6 lg:px-8 with max-w-screen-xl. Sections: py-12 md:py-16 lg:py-24. Stack gaps: gap-4 / gap-6 / gap-8.",
+    "typography": "Font families via CSS variables (--font-sans, --font-heading). Heading scale: text-3xl/4xl/5xl with tracking-tight font-semibold. Body: text-sm / text-base with text-muted-foreground for secondary.",
+    "conventions": [
+      "Use cn() from lib/utils for className composition (clsx + tailwind-merge)",
+      "Variants via cva() with size + variant slots",
+      "Icons from lucide-react — size via className h-4 w-4 etc.",
+      "Radix primitives mirror WAI-ARIA patterns — do not reinvent accessibility",
+      "Prefer composition via asChild over prop drilling"
+    ]
+  }
+}

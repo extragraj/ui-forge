@@ -1,0 +1,53 @@
+<!-- Example: CONVERT_SECTION (HTML → TSX) -->
+<!-- Invoke:
+  node invoke.js \
+    --task "Convert hero section into a typed Next.js component" \
+    --refs ./examples/01-hero-section/input/hero.html \
+    --output ./examples/01-hero-section/output/HeroSection.tsx
+-->
+
+<section class="hero-wrapper">
+  <div class="hero-content">
+    <h1 class="hero-title">Build faster with AI</h1>
+    <p class="hero-subtitle">The component generator that reads your design system.</p>
+    <a href="/get-started" class="hero-cta">Get started free</a>
+    <p class="hero-note">No credit card required · Free plan available</p>
+  </div>
+  <div class="hero-media">
+    <img src="/dashboard-preview.png" alt="Platform dashboard preview" />
+  </div>
+</section>
+
+<style>
+  .hero-wrapper {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    padding: 80px 40px;
+    background: #f8fafc;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  .hero-content { display: flex; flex-direction: column; justify-content: center; }
+  .hero-title { font-size: 2.5rem; font-weight: 700; color: #0f172a; line-height: 1.2; }
+  .hero-subtitle { font-size: 1.125rem; color: #475569; margin-top: 1rem; max-width: 440px; }
+  .hero-cta {
+    display: inline-block;
+    margin-top: 1.5rem;
+    padding: 0.75rem 1.5rem;
+    background: #2563eb;
+    color: #fff;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 500;
+    align-self: flex-start;
+  }
+  .hero-note { margin-top: 0.75rem; font-size: 0.875rem; color: #94a3b8; }
+  .hero-media { display: flex; align-items: center; justify-content: flex-end; }
+  .hero-media img { width: 100%; max-width: 520px; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.1); }
+
+  @media (max-width: 768px) {
+    .hero-wrapper { grid-template-columns: 1fr; padding: 48px 24px; }
+    .hero-media { display: none; }
+  }
+</style>

@@ -30,6 +30,9 @@ node scripts/scan.js --ignore ./ci.ignore
 node scripts/scan.js --no-default-ignore
 node scripts/scan.js --quick
 
+# Scan with schema v4 — extracts dark: Tailwind tokens into tailwind.darkColorTokens
+node scripts/scan.js --schema-v4
+
 # Prepare generation context (output goes to stdout; AI reads and generates)
 node scripts/invoke.js --task "Convert hero section" --refs ./hero.html --output ./Hero.tsx
 
@@ -48,8 +51,35 @@ node scripts/invoke.js --task "Build pricing variant" --signal CONVERT_VARIANT -
 # Accessibility enforcement (+A11Y modifier)
 node scripts/invoke.js --task "Build hero" --refs ./hero.html --a11y --output ./Hero.tsx
 
+# Brand enforcement (+BRAND auto-detected from ref filename or designStandards.brand)
+node scripts/invoke.js --task "Build hero" --refs ./hero.html,./BRAND.md --output ./Hero.tsx
+
+# Creative / greenfield (+CREATIVE; standalone only — refused under variant/page/paired)
+node scripts/invoke.js --task "Design a trust hero for a fintech site" --creative --refs ./BRAND.md --output ./Hero.tsx
+
+# Iterative surgical edit (+DIFF; CONVERT_SECTION only)
+node scripts/invoke.js --task "Add a sticky CTA bar above the footer" --diff ./components/Hero.tsx
+
+# Preview — write forge-preview.html (styled context snapshot; standalone mode only)
+node scripts/invoke.js --task "..." --refs ./ref.html --preview
+
+# Verify — add CONTRACT CHECK requirement to FORGE NOTES
+node scripts/invoke.js --task "..." --refs ./types.ts --verify --output ./Variant.tsx
+
+# Pre-flight input validation (CONVERT_VARIANT only — fails fast on malformed contract)
+node scripts/invoke.js --task "..." --refs ./types.ts --validate-input
+
+# Theme-seeded scan for fresh projects (gap-fill only; scan data wins)
+node scripts/scan.js --theme shadcn
+node scripts/scan.js --theme mantine
+node scripts/scan.js --theme plain-tailwind
+
 # Post-generation contract validator (CONVERT_VARIANT output)
 node scripts/validate-contract.js ./Variant.tsx ./types.ts
+
+# Post-generation verifier — static contract checks + optional Playwright screenshot
+node scripts/verify.js ./Variant.tsx ./types.ts
+node scripts/verify.js ./Variant.tsx ./types.ts --playwright http://localhost:3000
 
 # Sync version across all files after editing skill.version
 node scripts/sync-version.mjs
@@ -61,17 +91,18 @@ node scripts/sync-version.mjs
 
 ### Three entry points
 
-- **`scripts/scan.js`** — Scans the *target* project (cwd), writes `design/design-arch.json` (v3 schema) and `design/component-usage.json`. AI synthesis uses the `claude` CLI first, then static fallback. No API key needed.
-- **`scripts/invoke.js`** — Reads `design/design-arch.json`, classifies refs, detects signals, composes structured context, and prints to stdout. No API calls. AI assistant reads output and generates the component.
+- **`scripts/scan.js`** — Scans the *target* project (cwd), writes `design/design-arch.json` (v3/v4 schema) and `design/component-usage.json`. AI synthesis uses the `claude` CLI first, then static fallback. No API key needed. Pass `--schema-v4` to extract dark-mode color tokens into `tailwind.darkColorTokens`.
+- **`scripts/invoke.js`** — Reads `design/design-arch.json`, classifies refs, detects signals, composes structured context, and prints to stdout. No API calls. AI assistant reads output and generates the component. Auto-migrates v3→v4 schema on read.
 - **`scripts/validate-contract.js`** — Post-generation contract validator for `CONVERT_VARIANT` outputs. Heuristic/regex-based (no TypeScript compiler dependency). Reports violations: extra exports, missing destructures, missing `null` fallback, `?? null` for optionals. Exit `1` on failure — usable in CI.
+- **`scripts/verify.js`** — Extended post-generation verifier. Runs all `validate-contract.js` checks plus optional Playwright visual screenshot (`--playwright <url>`). Imports shared logic from `packages/variant-contract/validate.js`. Detects paired mode and reports `a11yRequired` status.
 
 ### Signal-based generation
 
 `detectSignals()` in `invoke.js` classifies refs and determines:
 - **Primary signal**: `CONVERT_SECTION` (default), `CONVERT_PAGE` (>400 lines or task mentions "page"), or `CONVERT_VARIANT` (single interface file, no HTML/image layout refs)
-- **Modifiers**: `+CONFIG` (JSON/data ref present), `+IMAGE` (image ref present), `+A11Y` (via `--a11y`, `arch.a11yRequired`, or `.stackshift/installed.json` `a11yRequired: true`)
+- **Modifiers**: `+CONFIG` (JSON/data ref present), `+IMAGE` (image ref present), `+BRAND` (ref filename matches `/brand|voice|tone/i`, or `arch.designStandards.brand` set), `+A11Y` (via `--a11y`, `arch.a11yRequired`, or `.stackshift/installed.json` `a11yRequired: true`), `+CREATIVE` (via `--creative`; **refused** under `CONVERT_VARIANT`, `CONVERT_PAGE`, and paired mode), `+DIFF` (via `--diff <path>`; **`CONVERT_SECTION` only** — refused under `CONVERT_VARIANT`, `CONVERT_PAGE`, and `+CREATIVE`)
 - **Override**: `--signal` flag forces the primary signal, bypassing auto-detection
-- **Paired mode**: `.stackshift/installed.json` presence is detected; surfaced as `PAIRED: stackshift x.y.z` in `CONVERT_VARIANT` output; honors `a11yRequired`
+- **Paired mode**: `.stackshift/installed.json` presence is detected; surfaced as `PAIRED: stackshift x.y.z` in `CONVERT_VARIANT` output; honors `a11yRequired`; blocks `+CREATIVE`
 
 `CONVERT_PAGE` triggers a **two-stage pipeline**:
 - Stage 1 — outputs page decomposition context; the AI writes `design/forge-page-plan.json`
@@ -94,9 +125,13 @@ All outputs contain: task, design authority, pre-processed refs, generation inst
 
 ### Prompt composition
 
-`references/prompt-patterns.md` contains named blocks parsed by `extractBlock()`. `CONVERT_SECTION` provides the base addendum. `SIGNAL_CONFIG`, `SIGNAL_IMAGE`, and `SIGNAL_A11Y` provide addendum-only blocks appended after the base. `SIGNAL_VARIANT` replaces `CONVERT_SECTION` as the base under companion-mode handoff. These are embedded in the `GENERATION INSTRUCTIONS` section of the stdout output.
+`references/prompt-patterns.md` contains named blocks parsed by `extractBlock()`. `CONVERT_SECTION` provides the base addendum. `SIGNAL_CONFIG`, `SIGNAL_IMAGE`, `SIGNAL_A11Y`, `SIGNAL_BRAND`, `SIGNAL_CREATIVE`, and `SIGNAL_DIFF` provide addendum-only blocks appended after the base. `SIGNAL_VARIANT` replaces `CONVERT_SECTION` as the base under companion-mode handoff. These are embedded in the `GENERATION INSTRUCTIONS` section of the stdout output.
 
 The `CONVERT_SECTION` and `SIGNAL_VARIANT` base blocks include an **anti-slop aesthetic guardrail** (no default hero gradients, no rainbow headings, no filler CTAs, no Lorem ipsum, visual density matches reference/contract).
+
+`SIGNAL_CREATIVE` bundles the `// FORGE PHILOSOPHY` directive inside its addendum (one block, no separate file) — restraint over ornament, earned hierarchy, content-justified sections. `SIGNAL_BRAND` requires FORGE NOTES to include a `BRAND` sub-block documenting voice adjustments, brand-color → design-arch token mappings, and typography decisions.
+
+`SIGNAL_DIFF` (0.1.6+) is injected only when `--diff <path>` is passed. `invoke.js` loads the existing file as `diffSource`, emits an `EXISTING COMPONENT [path]` block in the section context, and defaults `--output` to the diff path. The addendum instructs the AI to preserve unchanged regions and rewrite FORGE NOTES from scratch with a `DIFF` sub-block.
 
 `SIGNAL_VARIANT` requires FORGE NOTES to include a `// CONTRACT` sub-block documenting contract path, interface name, version, every prop consumed, fallback rule verified, and exports invariant confirmation.
 
@@ -109,11 +144,13 @@ The v3 schema:
 - `usedComponents` — named components imported from path-alias and scoped packages
 - `usedLibraries` — non-framework packages with use counts
 - `tailwind.themeSection` / `tailwind.colorTokens` — extracted from `tailwind.config.*`
+- `tailwind.darkColorTokens` — (v4 only, via `--schema-v4`) comma-separated `dark:` Tailwind utilities found in source. Namespace reserved to avoid conflict with StackShift Studio dark-mode theming.
 - `globalCss` — excerpt from `globals.css`
 - `designStandards` — object of `{ key: relPath }` pointing to markdown standard docs. Auto-populated with any `design/standards/*.md` files found during scan. Set `"_useBuiltins": false` to opt out of built-in fallbacks.
 - `patterns.spacing` / `patterns.typography` / `patterns.conventions` — AI-synthesized
+- `_theme` — set when `scan.js --theme <name>` was used; records which starter preset filled the gaps
 
-`loadDesignArch()` auto-migrates v2 → v3 on read. Warns if >7 days old.
+`loadDesignArch()` auto-migrates v2 → v3 → v4 on read. Warns if >7 days old.
 
 ### Ignore handling (0.1.4+)
 
@@ -144,14 +181,30 @@ only HTML comments / markdown headings, so fresh installs inject no fallback
 content. Each injected block carries a `# source: arch | project | built-in`
 marker. Opt-out via `--no-default-standards` or `_useBuiltins: false`.
 
+### Theme starters (0.1.6+)
+
+`scan.js --theme <name>` loads a preset from `themes/<name>.json` and merges
+it into the scan output after synthesis. Ships with `shadcn`, `mantine`, and
+`plain-tailwind`. Merge semantics (gap-fill only; scan data wins):
+
+- `componentLib` replaced only if scan fell back to the default `['./components']`
+- `usedComponents` theme hints appended (deduped) when scan found fewer than 5
+- `usedLibraries` theme hints appended when not already present by name
+- `tailwind.colorTokens` filled only if empty
+- `patterns.spacing` / `patterns.typography` filled only if `'unknown'`
+- `patterns.conventions` filled only if empty
+
+Unknown `--theme` values fail fast on stderr with the available list. The
+applied theme is recorded as `arch._theme`.
+
 ### Pre-processing pipeline
 
 Before injection into context, refs are classified and transformed:
 - `.html` → extract `<style>` blocks + inline styles as **EXTRACTED STYLES**, strip `<head>`/`<script>`, cap body at 200 lines
 - `.tsx`/`.jsx` with JSX → extract classNames, CSS-in-JS, external imports, props interface, JSX return block; strip state/effects/handlers
 - `.tsx`/`.jsx` without JSX, `.ts`/`.js` config-named → config role (condensed if >100 lines)
-- `.json` → config role
-- `.md` → companion role
+- `.json` → config role (or brand role if basename matches `/brand|voice|tone/i`)
+- `.md` → companion role (or brand role if basename matches `/brand|voice|tone/i`)
 - images → path reference only (AI reads via vision capability)
 
 ### Output format (generated component)
@@ -164,8 +217,9 @@ Components generated by the AI must begin with a `// FORGE NOTES` comment block 
 |------|---------|
 | `SKILL.md` | Skill entrypoint — YAML frontmatter + operating spec |
 | `scripts/invoke.js` | Context-preparation script — outputs structured context to stdout |
-| `scripts/scan.js` | Project scanner → `design-arch.json` |
+| `scripts/scan.js` | Project scanner → `design-arch.json` (v3/v4; use `--schema-v4` for dark tokens) |
 | `scripts/validate-contract.js` | Post-generation contract validator for `CONVERT_VARIANT` outputs |
+| `scripts/verify.js` | Extended verifier — static contract checks + optional Playwright screenshot |
 | `scripts/sync-version.mjs` | Syncs `skill.version` → `package.json`, `README.md`, `SKILL.md` |
 | `references/prompt-patterns.md` | Composable signal instruction blocks (+ anti-slop, CONTRACT, a11y) |
 | `references/advanced-usage.md` | Custom signals, troubleshooting |
@@ -173,6 +227,9 @@ Components generated by the AI must begin with a `// FORGE NOTES` comment block 
 | `references/standards/` | Built-in fallback design standards (empty templates: typography, spacing, color, a11y) |
 | `references/standards/README.md` | How the three-layer standards resolution works and how to override |
 | `references/default-forgeignore.txt` | Empty-by-default `.forgeignore` template with copy-paste instructions |
+| `themes/` | Theme starter presets for `scan.js --theme <name>` (`shadcn`, `mantine`, `plain-tailwind`) |
+| `packages/variant-contract/` | `@extragraj/variant-contract` — zero-dependency validator module + contract spec |
+| `examples/` | Four annotated conversion examples (one per primary signal) |
 | `skill.version` | Canonical version (edit this, then run `sync-version.mjs`) |
 | `change-logs/` | Per-release markdown notes in kebab-case (`x-x-x-description.md`) |
 | `design/design-arch.json` | Generated design authority (not committed upstream) |

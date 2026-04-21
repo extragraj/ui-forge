@@ -1,0 +1,23 @@
+{
+  "_theme": "plain-tailwind",
+  "_description": "Vanilla Tailwind CSS with no component library. Semantic HTML elements styled directly via utility classes. No Radix, no shadcn, no Mantine.",
+  "componentLib": ["./components"],
+  "usedComponents": [],
+  "usedLibraries": [
+    { "name": "clsx", "version": "^2.0.0", "uses": 1 }
+  ],
+  "tailwind": {
+    "colorTokens": "Tailwind default palette (slate/zinc/neutral + one accent). Recommend configuring a small semantic alias set in tailwind.config.ts (bg, surface, text, muted, accent)."
+  },
+  "patterns": {
+    "spacing": "Container: mx-auto max-w-7xl px-4 sm:px-6 lg:px-8. Sections: py-16 sm:py-24. Vertical rhythm via space-y-* or gap-*.",
+    "typography": "Native Tailwind font-sans / font-serif. Headings: text-3xl sm:text-4xl font-bold tracking-tight. Body: text-base text-gray-600 / text-gray-700. No @tailwindcss/typography assumed.",
+    "conventions": [
+      "Semantic HTML primitives — <button>, <a>, <section>, <article> — styled with utilities",
+      "No component library dependencies; compose small local components per file",
+      "Prefer utility classes over @apply; @apply only in globals.css for reset/base",
+      "Accent color centralised as a single --accent CSS variable or theme color",
+      "Icons as inline SVG or from a single light library (lucide-react, heroicons)"
+    ]
+  }
+}

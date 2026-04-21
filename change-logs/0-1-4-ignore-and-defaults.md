@@ -4,8 +4,7 @@ Released 2026-04-20.
 
 ## Summary
 
-Four independent quality-of-life upgrades, all backwards-compatible and all
-StackShift-safe.
+Four independent quality-of-life upgrades, all backwards-compatible and all StackShift-safe.
 
 1. **Proper `.forgeignore` + gitignore-subset matcher** in `scripts/scan.js`.
 2. **Scan efficiency** — dirent walk, directory-level pruning, hoisted regexes,

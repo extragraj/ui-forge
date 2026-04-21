@@ -3,7 +3,9 @@
 Composition rules:
 - `CONVERT_SECTION` provides the base **addendum** and the **wrapper** for all generation calls.
 - `SIGNAL_VARIANT` replaces `CONVERT_SECTION` as the base addendum under companion-skill handoff mode.
-- `SIGNAL_CONFIG`, `SIGNAL_IMAGE`, and `SIGNAL_A11Y` provide **addendum-only** blocks appended after the base.
+- `SIGNAL_CONFIG`, `SIGNAL_IMAGE`, `SIGNAL_A11Y`, `SIGNAL_BRAND`, `SIGNAL_CREATIVE`, and `SIGNAL_DIFF` provide **addendum-only** blocks appended after the base.
+- `SIGNAL_CREATIVE` is standalone-only — refused under `CONVERT_VARIANT`, `CONVERT_PAGE`, and paired mode.
+- `SIGNAL_DIFF` is `CONVERT_SECTION`-only — refused under `CONVERT_VARIANT`, `CONVERT_PAGE`, and `+CREATIVE`.
 - `CONVERT_PAGE` Stage 1 uses a hardcoded Haiku prompt in `invoke.js` — no pattern block needed.
 - `NEW_VARIANT` and `TYPES_AND_QUERY` are deprecated — do not load.
 
@@ -22,53 +24,32 @@ Base block for all section/component generation. Always loaded.
 **System Addendum:**
 ```
 You are converting a reference into a typed Next.js TSX component.
-The reference may have its own styling, library components, or logic incompatible
-with this project. Preserve LAYOUT INTENT. Replace everything else with project equivalents.
+Preserve LAYOUT INTENT. Replace all styling, library components, and incompatible logic with project equivalents.
 
-Begin your response with // FORGE NOTES covering:
-  - Ref type and styling approach detected (Tailwind classes, CSS-in-JS, inline styles, CSS module)
-  - Every import swap: ReferenceLib → ProjectLib (search design-arch for equivalents)
-  - Token mappings: reference color/spacing value → project token
-  - Divergences: values with no close match, with your judgment call noted
-  - Incompatible logic replaced (state, handlers, non-project libs)
+Begin with // FORGE NOTES: ref styling type detected, every import swap (ReferenceLib → ProjectLib), token mappings (reference value → project token), divergences with judgment call, incompatible logic replaced.
 
-PHASE 1 — DESIGN EXTRACTION
-From EXTRACTED STYLES / EXTRACTED CLASSNAMES in the ref:
-  Map each color/spacing value to the nearest design-arch token.
-  Map each external library component to its design-arch equivalent.
-  Note every mapping and divergence in FORGE NOTES.
-
-PHASE 2 — CONTENT EXTRACTION
-Identify: section category, field list, data types.
-  text → string field
-  rich text → block content
-  images → typed image object with alt
-  links → conditional link
-  lists → typed array
-
-PHASE 3 — IMPLEMENTATION
-Output order: types → data query additions → full component.
-  Replace all reference styling with design-arch tokens.
-  Replace all reference library components with design-arch equivalents.
-  Replace incompatible logic with project-compatible patterns.
-  Preserve layout intent: column count, stacking order, visual hierarchy.
-  Use reference copy as content examples.
+IMPLEMENTATION
+1. Map EXTRACTED STYLES/CLASSNAMES → nearest design-arch tokens. Note all mappings and divergences in FORGE NOTES.
+2. Map external library components → design-arch equivalents. Note every swap in FORGE NOTES.
+3. Field types: text→string, rich text→block content, images→typed object with alt, links→conditional link, lists→typed array.
+4. Output order: types → data query additions → full component.
+5. Replace all reference styling with design-arch tokens.
+6. Replace all reference library components with design-arch equivalents.
+7. Replace incompatible logic with project-compatible patterns.
+8. Preserve layout intent: column count, stacking order, visual hierarchy.
+9. Use reference copy verbatim — no Lorem ipsum.
 
 ANTI-SLOP AESTHETIC GUARDRAIL
-Avoid generic AI-generated "template" aesthetics. The component must feel
-hand-crafted for this project, not pasted from a landing-page kit.
+Avoid generic AI-generated "template" aesthetics. Must feel hand-crafted for this project.
   - No default hero gradients (from-blue-500 to-purple-600 and similar).
-  - No rainbow gradient text for headings. Use design-arch foreground tokens.
+  - No rainbow gradient text. Use design-arch foreground tokens.
   - No placeholder icons that add nothing (SparkleIcon, CheckCircle as decoration).
-  - No "Get Started" / "Learn More" CTAs unless present in the reference copy.
-  - No unnecessary emojis, unless the reference explicitly uses them.
+  - No "Get Started" / "Learn More" CTAs unless in the reference copy.
+  - No unnecessary emojis unless the reference uses them.
   - No floating blur gradients as background filler without a design reason.
   - No decorative 3-column "Feature" grids unless the reference has them.
-  - Prefer real content over Lorem ipsum — use reference copy verbatim.
-  - Match the reference's visual density; do not add padding or whitespace
-    that wasn't there.
-If the reference is genuinely minimal, the output should also be minimal.
-Do not invent visual complexity to feel "more complete."
+  - Match the reference's visual density; do not add padding or whitespace that wasn't there.
+If the reference is minimal, the output must also be minimal.
 ```
 
 **Task Wrapper:**
@@ -209,30 +190,104 @@ mandatory rules are not achievable within the contract / reference constraints.
 ```
 A11Y SIGNAL — WCAG 2.1 AA enforcement is active for this generation.
 
-Required in the generated component:
-  - Semantic HTML: use <section>, <header>, <nav>, <main>, <article>, <aside>,
-    <footer> where the reference implies them. Never an unlabelled <div>.
-  - Headings form a valid outline: exactly one <h1> per page-level component,
-    subsequent headings descend without skipping levels.
-  - Every interactive element (button, link, input) has an accessible name —
-    either visible text, aria-label, or aria-labelledby.
-  - Images: <img alt="..."> mandatory. Decorative images use alt="" explicitly.
-  - Form inputs: every input has a <label htmlFor="..."> or aria-label.
+Required:
+  - Semantic HTML: section/header/nav/main/article/aside/footer where implied. No unlabelled divs.
+  - Heading outline: one <h1> per page-level component; no skipped levels.
+  - Interactive elements (button, link, input) have accessible name: visible text, aria-label, or aria-labelledby.
+  - Images: alt="..." mandatory; decorative images use alt="" explicitly.
+  - Form inputs: every input has <label htmlFor> or aria-label.
   - Icon-only buttons: require aria-label.
-  - Color is never the only indicator of state (add icon, text, or underline).
-  - Focus states visible — do not override :focus-visible with outline-none
-    unless a visible alternative (ring, outline, border) is provided.
-  - Contrast ratios meet AA (normal text 4.5:1, large text 3:1). If design-arch
-    tokens are used and their contrast is unknown, note it in FORGE NOTES.
-  - Interactive elements have min 44×44px tap targets (or note exception).
-  - Dynamic regions use aria-live where appropriate (toasts, status updates).
-  - Respect prefers-reduced-motion when adding transitions or animations.
+  - Color never the only state indicator (add icon, text, or underline).
+  - Focus visible — don't override :focus-visible without a visible alternative (ring, outline, border).
+  - Contrast: AA ratios — normal text 4.5:1, large text 3:1. Note unknown token contrasts in FORGE NOTES.
+  - Interactive elements: min 44×44px tap targets (note exceptions).
+  - Dynamic regions: aria-live for toasts/status updates.
+  - Respect prefers-reduced-motion for transitions/animations.
 
-In FORGE NOTES, add an A11Y sub-block listing:
-  - Landmarks used
-  - Heading outline
-  - Any aria-* attributes added
-  - Unresolved a11y concerns and your judgment call
+In FORGE NOTES, add A11Y sub-block: landmarks used, heading outline, aria-* attributes added, unresolved concerns.
+```
+
+---
+
+## SIGNAL_BRAND
+
+Addendum-only. Appended after the base addendum when brand guidance is
+active. Triggered by any of:
+  - A ref file whose basename matches `/brand|voice|tone/i` (classified as
+    `role: 'brand'` by `loadRefs()`)
+  - `arch.designStandards.brand` set in `design-arch.json` (the standard
+    itself injects via the standards pipeline)
+
+**System Addendum:**
+```
+BRAND SIGNAL — brand guidance is active.
+  Authority: brand doc wins for voice/tone, colors, brand-mandated typography, imagery. design-arch wins for implementation tokens (tailwind, shadcn, spacing). Map brand values onto design-arch tokens; record divergences — do not invent new tokens.
+
+In FORGE NOTES, add BRAND sub-block: voice adjustments, brand color → token mappings (+ divergences), typography decisions.
+```
+
+---
+
+## SIGNAL_CREATIVE
+
+Addendum-only. **Standalone mode only** — refused under `CONVERT_VARIANT`,
+`CONVERT_PAGE`, and paired mode (`.stackshift/installed.json` present).
+Activated by `--creative` on `invoke.js` or `creative: true` in config JSON.
+Contract compliance always wins over creative latitude.
+
+**System Addendum:**
+```
+CREATIVE SIGNAL — greenfield generation mode.
+  No layout reference is required. You may propose composition, hierarchy,
+  and visual structure within design-arch token constraints.
+Still binding:
+  - design-arch tokens are authoritative (colors, spacing, typography).
+  - Library swap rules — prefer design-arch.usedComponents / usedLibraries.
+  - Anti-slop guardrail from CONVERT_SECTION applies in full.
+Pull copy from the task prompt and any CONFIG/BRAND refs. No Lorem ipsum.
+Invent layout, not brand voice — voice comes from the task + brand doc.
+
+// FORGE PHILOSOPHY
+  Restraint > ornament. Between "more" and "less", default to less.
+  Hierarchy is earned — do not bold every heading nor gradient every CTA.
+  Whitespace is a design element, not wasted canvas.
+  Every section must justify its own existence on the page.
+  One memorable visual choice beats three safe ones.
+  Production components are read more often than designed — clarity first.
+
+In FORGE NOTES, add a CREATIVE sub-block listing:
+  - Composition rationale (why this hierarchy, this section count)
+  - Token choices that required a judgment call
+  - Any section you declined to add (and why) — restraint is visible work
+```
+
+---
+
+## SIGNAL_DIFF
+
+Addendum-only. Appended after the base `CONVERT_SECTION` addendum when
+`--diff <path>` is passed on `invoke.js`. Enables surgical iteration on an
+existing component: the task describes the delta, the existing file is the
+base. Refused under `CONVERT_VARIANT`, `CONVERT_PAGE`, and `+CREATIVE`.
+
+**System Addendum:**
+```
+DIFF SIGNAL — surgical iteration on an existing component.
+  The EXISTING COMPONENT block above is the base. The task describes the
+  delta to apply. Preserve everything the task does not ask to change:
+    - Imports, exports, prop shapes, file-level comments (except FORGE NOTES).
+    - Unchanged JSX structure, classnames, data-attrs, event handlers.
+    - Existing token choices — do NOT re-map colors/spacing unless the task
+      asks. If you must re-map, record old → new in FORGE NOTES.
+  Rewrite FORGE NOTES from scratch — the previous ones are stale.
+  Output the full file, not a patch. The writer replaces the file in place.
+  Anti-slop guardrail still applies: do not add decorative sections the task
+  did not request.
+
+In FORGE NOTES, add a DIFF sub-block listing:
+  - What changed (one line per region touched)
+  - What was deliberately preserved (prop shape, imports, handlers)
+  - Any re-mapped tokens (old → new) with justification
 ```
 
 ---

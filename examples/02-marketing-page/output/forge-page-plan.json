@@ -1,0 +1,25 @@
+{
+  "_ref": "./examples/02-marketing-page/input/landing.html",
+  "_created": "2026-04-21T00:00:00.000Z",
+  "_note": "Stage 1 output — AI writes this file after decomposing the page. Review before re-running for Stage 2.",
+  "sections": [
+    {
+      "name": "heroSection",
+      "type": "hero",
+      "lines": [19, 35],
+      "existingProjectSection": false
+    },
+    {
+      "name": "featuresSection",
+      "type": "features",
+      "lines": [37, 65],
+      "existingProjectSection": false
+    },
+    {
+      "name": "callToActionSection",
+      "type": "callToAction",
+      "lines": [67, 77],
+      "existingProjectSection": false
+    }
+  ]
+}

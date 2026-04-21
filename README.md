@@ -4,13 +4,13 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org)
 [![Skills Compatible](https://img.shields.io/badge/skills-compatible-blue)](https://github.com/vercel/skills-cli)
 
-> **Version** 0.1.4
+> **Version** 0.1.8
 
 Next.js component generator for Claude Code and AI coding assistants. Converts HTML, TSX, images, and JSON reference materials into production-ready components that match your project's existing design system — using your actual component libraries, Tailwind tokens, and coding conventions.
 
 ## What is UI Forge?
 
-UI Forge is a Claude Code skill that understands your project before generating anything. It scans your codebase to extract component libraries, Tailwind tokens, and design standards, then uses that context to produce components that fit your stack — not generic templates.
+UI Forge is a Agentic Code skill that understands your project before generating anything. It scans your codebase to extract component libraries, Tailwind tokens, and design standards, then uses that context to produce components that fit your stack — not generic templates.
 
 - **Multi-input** — HTML templates, reference TSX, design images, JSON data shapes, or any combination
 - **Design-aware** — reads your `tailwind.config`, global CSS, and component standards to map tokens and swap library components
@@ -120,9 +120,12 @@ UI Forge classifies your inputs and composes the right strategy automatically:
 | `CONVERT_VARIANT` | `.ts`/`.tsx` props interface ref with no HTML / image layout | Companion-mode contract implementation |
 | `+CONFIG` | JSON or data file present | Treats JSON keys as typed props schema |
 | `+IMAGE` | Image file attached | Vision API analyzes layout, hierarchy, and colors |
+| `+BRAND` | Ref filename matches `/brand\|voice\|tone/i`, or `arch.designStandards.brand` set | Voice/tone enforcement; brand-color → design-arch token mapping |
 | `+A11Y` | `--a11y`, `a11yRequired` in design-arch or StackShift marker | WCAG 2.1 AA enforcement |
+| `+CREATIVE` | `--creative` (standalone only — refused under `CONVERT_VARIANT`, `CONVERT_PAGE`, and paired mode) | Greenfield generation without a layout ref; appends `// FORGE PHILOSOPHY` directive |
+| `+DIFF` | `--diff <path>` (`CONVERT_SECTION` only — refused under `CONVERT_VARIANT`, `CONVERT_PAGE`, `+CREATIVE`) | Surgical iteration: existing file injected as base; task describes the delta |
 
-Signals stack — `CONVERT_SECTION + CONFIG + IMAGE + A11Y` is a valid combination and composes all instructions.
+Signals stack — `CONVERT_SECTION + CONFIG + IMAGE + BRAND + A11Y` is a valid combination and composes all instructions. `+CREATIVE` is mutually exclusive with `CONVERT_VARIANT`, `CONVERT_PAGE`, and paired mode. `+DIFF` is `CONVERT_SECTION`-only and refuses to compose with `+CREATIVE`.
 
 ### Intelligent Token Mapping
 
@@ -315,6 +318,8 @@ the FORGE NOTES `A11Y` sub-block as judgment calls.
 | `--signal` | Force primary signal: `CONVERT_SECTION`, `CONVERT_PAGE`, `CONVERT_VARIANT` |
 | `--mode` | `full` (default) or `body-only`. Default is `body-only` under `CONVERT_VARIANT`. |
 | `--a11y` | Enable `+A11Y` modifier (WCAG 2.1 AA enforcement) |
+| `--creative` | Enable `+CREATIVE` modifier (greenfield generation; standalone only) |
+| `--diff <path>` | Enable `+DIFF` modifier (iterative regeneration; `--output` defaults to the same path) |
 | `--no-default-standards` | Skip built-in fallback standards (arch + project only) |
 | `--rescan` | Re-run `scan.js` before generating |
 | `--replan` | Force Stage 1 page plan regeneration |
@@ -329,6 +334,7 @@ the FORGE NOTES `A11Y` sub-block as judgment calls.
 | `--quick` | Skip the `claude` CLI synthesis branch (static analysis only) |
 | `--ignore <file>` | Load an additional ignore file (repeatable) |
 | `--no-default-ignore` | Skip the built-in base ignore list |
+| `--theme <name>` | Seed `design-arch.json` from `themes/<name>.json` (gap-fill only). Available: `shadcn`, `mantine`, `plain-tailwind`. |
 
 ## Changelog
 
@@ -336,6 +342,10 @@ Full release notes are in [`change-logs/`](./change-logs/).
 
 | Version | Date | Notes |
 |---------|------|-------|
+| [0.1.8](./change-logs/0-1-8-token-optimization.md) | 2026-04-21 | Token optimization: SKILL.md body compressed (~1,800 tokens/activation saved), `prompt-patterns.md` addenda condensed (`CONVERT_SECTION` +`SIGNAL_A11Y` +`SIGNAL_BRAND`), `archToContext()` caps tightened, `extractBlock()` memoized, `references/INDEX.md` added for targeted on-demand reads |
+| [0.1.7](./change-logs/0-1-7-examples-preview-verify-darkmode-contract.md) | 2026-04-21 | Golden conversion examples (`examples/`), `--preview` (HTML context snapshot; standalone only), `--verify` + `scripts/verify.js` (static contract checks + Playwright), `--validate-input` pre-flight, `scan.js --schema-v4` dark-mode token extraction, `packages/variant-contract/` shared validator module |
+| [0.1.6](./change-logs/0-1-6-diff-and-themes.md) | 2026-04-21 | `+DIFF` modifier for surgical iteration on an existing file (`--diff <path>`; `CONVERT_SECTION` only), `scan.js --theme <name>` starters for fresh projects (`shadcn`, `mantine`, `plain-tailwind`; gap-fill only, scan data wins) |
+| [0.1.5](./change-logs/0-1-5-brand-creative-and-philosophy.md) | 2026-04-21 | `+BRAND` modifier (auto-detected from ref filename or `designStandards.brand`), `+CREATIVE` modifier with `// FORGE PHILOSOPHY` directive (`--creative`; standalone only — refused under `CONVERT_VARIANT`, `CONVERT_PAGE`, and paired mode) |
 | [0.1.4](./change-logs/0-1-4-ignore-and-defaults.md) | 2026-04-20 | `.forgeignore` + gitignore-subset matcher, directory-boundary pruning, `--ignore` / `--no-default-ignore` / `--quick` / `--no-default-standards` flags, three-layer `loadDesignStandards` with built-in template fallbacks |
 | [0.1.3](./change-logs/0-1-3-contract-hardening-and-a11y.md) | 2026-04-14 | Contract hardening — `@contract-version` tag, CONTRACT header + FORGE NOTES sub-block, `validate-contract.js`, `+A11Y` modifier, anti-slop guardrail, paired-mode detection |
 | [0.1.2](./change-logs/0-1-2-companion-mode.md) | 2026-04-14 | Companion mode — `CONVERT_VARIANT` signal, `--signal` and `--mode` flags, body-only output, page-pipeline guard |

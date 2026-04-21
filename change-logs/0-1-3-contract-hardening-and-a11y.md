@@ -2,13 +2,11 @@
 
 Released: 2026-04-14
 
-Implements Phase 1 + 2 of the UI Forge optimization plan v2 (`ui-forge-optimization-plan`).
-All changes are additive and non-breaking — no API changes, no schema bumps, no
-behavior changes to existing flags.
+All changes are additive and non-breaking — no API changes, no schema bumps, no behavior changes to existing flags.
 
 ## What's new
 
-### Contract hardening (Section 5.2, Section 5.3, Section 5.5)
+### Contract hardening
 
 The handoff between UI Forge and StackShift now has mechanized guards.
 
@@ -32,7 +30,7 @@ The handoff between UI Forge and StackShift now has mechanized guards.
     - `?? null` used where `?? undefined` is required
   Exit code `1` on violations, `0` on pass. Usable in CI.
 
-### Accessibility — new `+A11Y` modifier (Section 6.3)
+### Accessibility — new `+A11Y` modifier
 
 - New `SIGNAL_A11Y` addendum block in `prompt-patterns.md`. Enforces WCAG 2.1
   AA rules: semantic HTML, heading outline, accessible names, alt text, label
@@ -44,27 +42,26 @@ The handoff between UI Forge and StackShift now has mechanized guards.
     - `a11yRequired: true` in `.stackshift/installed.json` (paired mode —
       StackShift-wide accessibility protocol is honored automatically)
 
-### Anti-slop guardrail (Section 4.1)
-
+### Anti-slop guardrail
 - `CONVERT_SECTION` and `SIGNAL_VARIANT` addendums now include explicit
   anti-slop rules: no default hero gradients, no rainbow headings, no filler
   CTAs, no decorative icons, no Lorem ipsum, visual density matches the
   reference/contract. Output stays hand-crafted, not template-kit.
 
-### Pushy description (Section 4.2)
+### Pushy description
 
 - `SKILL.md` frontmatter and `package.json` description now name both modes
   explicitly (standalone + StackShift companion) and the new guardrails. Helps
   hosts route requests to UI Forge.
 
-### Paired-mode detection (Section 4.6, Section 4.10 foundation)
+### Paired-mode detection
 
 - `invoke.js` reads `.stackshift/installed.json` when present, logs the
   detected StackShift version to stderr, surfaces `PAIRED: stackshift x.y.z`
   in the `CONVERT_VARIANT` context header, and honors the marker's
   `a11yRequired` field.
 
-### Version compatibility matrix (Section 6.6)
+### Version compatibility matrix
 
 - New `references/versions.md` — Node, Next.js, Tailwind, StackShift, component
   library, styling-system compatibility. Documents the breaking-change policy
@@ -102,23 +99,3 @@ The handoff between UI Forge and StackShift now has mechanized guards.
   tag (new CONTRACT header lines are opt-in via the tag's presence).
 - Design-arch schema unchanged (`_v: 3`).
 - No new dependencies — still Node stdlib only.
-
-## Not in this release
-
-Tracked in the plan, deferred to subsequent releases:
-
-- Section 5.1 `@extragraj/variant-contract` npm package (cross-repo coordination)
-- Section 5.4 StackShift-side pre-flight validation (StackShift repo)
-- Section 6.1 Full tiered protocol restructure (risk of breaking forks)
-- Section 6.2 Bootstrap + `/docs/` customization
-- Section 6.4 Unified `@extragraj/skills` CLI
-- Section 6.5 Shared evals harness
-- Section 4.3 `themes/` starters
-- Section 4.4 Golden-conversion examples directory
-- Section 4.6 `--preview` flag
-- Section 4.7 `--verify` Playwright
-- Section 4.8 `--diff` iterative mode
-- Section 4.9 `+BRAND` signal
-- Section 4.10 `+CREATIVE` greenfield signal
-- Section 4.14 Dark-mode schema v4
-- Section 4.15 `// FORGE PHILOSOPHY` block

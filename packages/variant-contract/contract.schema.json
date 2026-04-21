@@ -1,0 +1,36 @@
+{
+  "_spec": "variant-contract@1.0.0",
+  "description": "Invariants that every CONVERT_VARIANT output must satisfy",
+  "contractVersion": "1.0.0",
+  "rules": {
+    "exports": {
+      "required": "exactly one default export (the component function)",
+      "forbidden": "named exports of any kind — the props interface must be imported, not redefined or re-exported"
+    },
+    "imports": {
+      "required": "import the props interface by name from the contract file (import type { ... } from '...')"
+    },
+    "props": {
+      "required": "every required prop appears in the destructuring or JSX",
+      "optional": "optional props use `?? undefined` as fallback — never `?? null`, never default objects",
+      "unused": "no prop may be imported but left unused"
+    },
+    "nullFallback": {
+      "required": "component returns `null` when required props are absent (Variant Router invariant)"
+    },
+    "forbidden": [
+      "redefining the props interface inline",
+      "writing or modifying index.tsx",
+      "writing schema, types, or query files",
+      "adding extra exports beyond the default component"
+    ],
+    "forgeNotes": {
+      "required": "FORGE NOTES must include a CONTRACT sub-block documenting: file path, interface name, contract version, every prop consumed, fallback rule verified, exports invariant"
+    }
+  },
+  "contractVersionTag": "/** @contract-version x.y.z */ — JSDoc tag in the props file header. Absence treated as 1.0.0.",
+  "compatibility": {
+    "uiForge": ">=0.1.3",
+    "stackshift": ">=0.1.5"
+  }
+}

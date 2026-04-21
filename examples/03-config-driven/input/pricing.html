@@ -1,0 +1,55 @@
+<!-- Example: CONVERT_SECTION +CONFIG (HTML + JSON data shape) -->
+<!-- Invoke:
+  node invoke.js \
+    --task "Convert pricing section; use pricing-data.json as the data shape" \
+    --refs ./examples/03-config-driven/input/pricing.html,./examples/03-config-driven/input/pricing-data.json \
+    --output ./examples/03-config-driven/output/PricingSection.tsx
+-->
+
+<section class="pricing" style="padding:80px 40px;background:#f8fafc">
+  <h2 style="text-align:center;font-size:2rem;font-weight:700;color:#0f172a">Simple, honest pricing</h2>
+  <p style="text-align:center;color:#64748b;margin-top:.5rem">No hidden fees. Cancel anytime.</p>
+
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem;margin-top:3rem;max-width:1000px;margin-inline:auto">
+
+    <!-- Starter tier -->
+    <div style="padding:2rem;background:#fff;border:1px solid #e2e8f0;border-radius:12px">
+      <p style="font-size:.875rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Starter</p>
+      <p style="font-size:2.25rem;font-weight:700;color:#0f172a;margin-top:.5rem">$0<span style="font-size:1rem;font-weight:400;color:#94a3b8">/mo</span></p>
+      <ul style="margin-top:1.5rem;list-style:none;padding:0;display:flex;flex-direction:column;gap:.75rem">
+        <li style="color:#475569;font-size:.9375rem">✓ 3 projects</li>
+        <li style="color:#475569;font-size:.9375rem">✓ 5GB storage</li>
+        <li style="color:#475569;font-size:.9375rem">✓ Community support</li>
+      </ul>
+      <a href="/signup" style="display:block;margin-top:2rem;padding:.75rem;text-align:center;border:1px solid #cbd5e1;border-radius:8px;color:#475569;text-decoration:none;font-weight:500">Get started</a>
+    </div>
+
+    <!-- Pro tier (highlighted) -->
+    <div style="padding:2rem;background:#1e3a8a;border-radius:12px;position:relative">
+      <span style="position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:#3b82f6;color:#fff;font-size:.75rem;font-weight:600;padding:.25rem .75rem;border-radius:999px">Most popular</span>
+      <p style="font-size:.875rem;font-weight:600;color:#93c5fd;text-transform:uppercase;letter-spacing:.05em">Pro</p>
+      <p style="font-size:2.25rem;font-weight:700;color:#fff;margin-top:.5rem">$49<span style="font-size:1rem;font-weight:400;color:#93c5fd">/mo</span></p>
+      <ul style="margin-top:1.5rem;list-style:none;padding:0;display:flex;flex-direction:column;gap:.75rem">
+        <li style="color:#dbeafe;font-size:.9375rem">✓ Unlimited projects</li>
+        <li style="color:#dbeafe;font-size:.9375rem">✓ 100GB storage</li>
+        <li style="color:#dbeafe;font-size:.9375rem">✓ Priority support</li>
+        <li style="color:#dbeafe;font-size:.9375rem">✓ Team collaboration</li>
+      </ul>
+      <a href="/signup-pro" style="display:block;margin-top:2rem;padding:.75rem;text-align:center;background:#3b82f6;border-radius:8px;color:#fff;text-decoration:none;font-weight:600">Start free trial</a>
+    </div>
+
+    <!-- Enterprise tier -->
+    <div style="padding:2rem;background:#fff;border:1px solid #e2e8f0;border-radius:12px">
+      <p style="font-size:.875rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Enterprise</p>
+      <p style="font-size:2.25rem;font-weight:700;color:#0f172a;margin-top:.5rem">Custom</p>
+      <ul style="margin-top:1.5rem;list-style:none;padding:0;display:flex;flex-direction:column;gap:.75rem">
+        <li style="color:#475569;font-size:.9375rem">✓ Everything in Pro</li>
+        <li style="color:#475569;font-size:.9375rem">✓ SSO + SAML</li>
+        <li style="color:#475569;font-size:.9375rem">✓ SLA guarantee</li>
+        <li style="color:#475569;font-size:.9375rem">✓ Dedicated support</li>
+      </ul>
+      <a href="/contact" style="display:block;margin-top:2rem;padding:.75rem;text-align:center;border:1px solid #cbd5e1;border-radius:8px;color:#475569;text-decoration:none;font-weight:500">Contact sales</a>
+    </div>
+
+  </div>
+</section>

@@ -24,13 +24,15 @@
  *   --signal    Force primary signal: CONVERT_SECTION, CONVERT_PAGE, CONVERT_VARIANT
  *   --mode      full (default) or body-only. body-only requires --output to point at an existing file
  *   --a11y      Enable WCAG 2.1 AA enforcement (adds +A11Y modifier)
+ *   --creative  Greenfield generation (adds +CREATIVE; standalone-mode only)
+ *   --diff      Iterative regeneration — point at an existing file; task describes the delta (adds +DIFF)
  *   --config    Load all params from a JSON file
  *   --rescan    Re-run scan.js before generating
  *   --replan    Force Stage 1 page plan regeneration
  */
 
 import {
-  readFileSync, existsSync, statSync,
+  readFileSync, writeFileSync, existsSync, statSync,
 } from 'fs'
 import { join, resolve, extname, basename, dirname } from 'path'
 import { fileURLToPath } from 'url'
@@ -47,6 +49,48 @@ const BUILTIN_STANDARD_KEYS = ['typography', 'spacing', 'color', 'a11y']
 const DIVIDER = '─'.repeat(60)
 const DEFAULT_CONTRACT_VERSION = '1.0.0'
 const SUPPORTED_CONTRACT_VERSIONS = ['1.0.0']
+const BRAND_NAME_RE = /\b(brand|voice|tone)\b/i
+
+// ─── Preview helpers ──────────────────────────────────────────────────────────
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+}
+
+function generatePreviewHtml({ task, signals, archCtx, refs, paired, standards }) {
+  const sig = `${signals.primary}${signals.modifiers.length ? ' +' + signals.modifiers.join(' +') : ''}`
+  const css = [
+    'body{font:14px/1.6 monospace;max-width:960px;margin:2em auto;padding:1em;background:#0d1117;color:#c9d1d9}',
+    'h1{color:#58a6ff;font-size:1.1rem;margin:.5rem 0}h2{color:#8b949e;font-size:.85rem;margin:1.5rem 0 .4rem}',
+    'pre{background:#161b22;padding:.75rem 1rem;overflow:auto;border-radius:6px;font-size:12px;white-space:pre-wrap;word-break:break-word}',
+    '.badge{display:inline-block;padding:.15em .5em;border-radius:3px;background:#21262d;color:#79c0ff;font-size:.8rem}',
+    '.paired{color:#f0883e;font-size:.85rem}.src{color:#3fb950;font-size:.75rem}',
+  ].join('')
+
+  const stdBlocks = standards
+    ? Object.entries(standards.standards).map(([k, v]) =>
+        `<h2>STANDARD: <code>${escapeHtml(k)}</code> <span class="src">[${escapeHtml(standards.sources?.[k] ?? 'unknown')}]</span></h2><pre>${escapeHtml(v.slice(0, 600))}</pre>`
+      ).join('\n')
+    : ''
+
+  const refBlocks = refs.filter(r => r.role !== 'image').map(r =>
+    `<h2>${escapeHtml(r.role.toUpperCase())} <code>[${escapeHtml(r.path)}]</code></h2><pre>${escapeHtml(r.content ?? '')}</pre>`
+  ).join('\n')
+
+  return [
+    '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width,initial-scale=1">',
+    `<title>UI Forge Preview</title><style>${css}</style></head><body>`,
+    '<h1>UI Forge — Generation Preview</h1>',
+    `${paired ? `<p class="paired">Paired mode: stackshift ${escapeHtml(paired.version)}</p>` : ''}`,
+    `<h2>Signal</h2><span class="badge">${escapeHtml(sig)}</span>`,
+    `<h2>Task</h2><pre>${escapeHtml(task)}</pre>`,
+    `<h2>Design Authority</h2><pre>${escapeHtml(archCtx)}</pre>`,
+    stdBlocks,
+    refBlocks,
+    '</body></html>',
+  ].join('\n')
+}
 
 // ─── Paired mode ──────────────────────────────────────────────────────────────
 
@@ -100,6 +144,9 @@ function loadDesignArch() {
     if (!arch.designStandards) arch.designStandards = {}
     arch._v = 3
   }
+
+  // Auto-migrate v3 → v4 (additive: darkColorTokens reserved, defaults to undefined)
+  if (arch._v === 3) arch._v = 4
 
   const age = arch._scanned
     ? (Date.now() - new Date(arch._scanned).getTime()) / 86_400_000
@@ -185,15 +232,20 @@ function archToContext(arch) {
   if (arch.componentLib?.length)
     lines.push(`componentLib: ${arch.componentLib.join(', ')}`)
   if (arch.usedComponents?.length)
-    lines.push(`usedComponents: ${arch.usedComponents.slice(0, 40).join(', ')}`)
+    lines.push(`usedComponents: ${arch.usedComponents.slice(0, 25).join(', ')}`)
   if (arch.usedLibraries?.length)
     lines.push(`usedLibraries: ${arch.usedLibraries.map(l => l.name).join(', ')}`)
   if (arch.tailwind?.colorTokens)
     lines.push(`colorTokens: ${arch.tailwind.colorTokens}`)
+  if (arch.tailwind?.darkColorTokens)
+    lines.push(`darkColorTokens: ${arch.tailwind.darkColorTokens}`)
   if (arch.tailwind?.themeSection)
-    lines.push(`tailwind.theme:\n${arch.tailwind.themeSection.slice(0, 800)}`)
-  if (arch.globalCss)
-    lines.push(`globalCss:\n${arch.globalCss.slice(0, 500)}`)
+    lines.push(`tailwind.theme:\n${arch.tailwind.themeSection.slice(0, 500)}`)
+  if (arch.globalCss) {
+    const css = arch.globalCss.trim()
+    if (!css.split('\n').every(l => /^\s*(@tailwind|\/\*|\*\/?|$)/.test(l)))
+      lines.push(`globalCss:\n${css.slice(0, 300)}`)
+  }
   if (arch.patterns?.spacing)    lines.push(`spacing: ${arch.patterns.spacing}`)
   if (arch.patterns?.typography) lines.push(`typography: ${arch.patterns.typography}`)
   if (arch.patterns?.conventions?.length)
@@ -375,7 +427,8 @@ function loadRefs(refs = []) {
     }
 
     if (ext === '.json') {
-      push({ role: 'config', path: ref, ext, content: preprocessConfig(raw), rawLines })
+      const role = BRAND_NAME_RE.test(name) ? 'brand' : 'config'
+      push({ role, path: ref, ext, content: preprocessConfig(raw), rawLines })
       continue
     }
 
@@ -389,7 +442,8 @@ function loadRefs(refs = []) {
         content = lines.slice(0, 100).join('\n')
           + (headings ? `\n\n// SECTION HEADINGS (truncated content):\n${headings}` : '\n...')
       }
-      push({ role: 'companion', path: ref, ext, content, rawLines })
+      const role = BRAND_NAME_RE.test(name) ? 'brand' : 'companion'
+      push({ role, path: ref, ext, content, rawLines })
       continue
     }
   }
@@ -418,7 +472,10 @@ function detectSignals(task, classifiedRefs, explicitSignal, opts = {}) {
   const modifiers = [
     ...(byRole.config?.length ? ['CONFIG'] : []),
     ...(byRole.image?.length ? ['IMAGE'] : []),
+    ...(byRole.brand?.length || opts.brandStandard ? ['BRAND'] : []),
     ...(opts.a11y ? ['A11Y'] : []),
+    ...(opts.creative ? ['CREATIVE'] : []),
+    ...(opts.diff ? ['DIFF'] : []),
   ]
 
   // Explicit --signal override
@@ -476,14 +533,18 @@ function getPatternSrc() {
   return _patternSrc
 }
 
+const _blockCache = new Map()
 function extractBlock(src, name) {
+  if (_blockCache.has(name)) return _blockCache.get(name)
   const heading = `## ${name}`
   const start = src.indexOf(heading)
   if (start === -1) return null
   const end = src.indexOf('\n## ', start + heading.length)
   const block = end === -1 ? src.slice(start) : src.slice(start, end)
   const addMatch = block.match(/\*\*System Addendum:\*\*\s*```([\s\S]*?)```/)
-  return { addendum: addMatch?.[1]?.trim() ?? '' }
+  const result = { addendum: addMatch?.[1]?.trim() ?? '' }
+  _blockCache.set(name, result)
+  return result
 }
 
 function loadComposedAddendum(signals) {
@@ -512,7 +573,7 @@ function appendStandards(lines, standardsResult) {
   }
 }
 
-function buildSectionContext({ task, archCtx, signals, standards, addendum, output }) {
+function buildSectionContext({ task, archCtx, signals, standards, addendum, output, diffSource, verify }) {
   const { byRole } = signals
   const mainRef = byRole.reference?.[0]
   const extraRefs = (byRole.reference ?? []).slice(1)
@@ -522,6 +583,7 @@ function buildSectionContext({ task, archCtx, signals, standards, addendum, outp
   const configRef = byRole.config?.[0]
   const imageRefs = byRole.image ?? []
   const companion = byRole.companion?.[0]
+  const brandRef = byRole.brand?.[0]
 
   const lines = []
   lines.push(`=== UI FORGE ===`)
@@ -546,6 +608,12 @@ function buildSectionContext({ task, archCtx, signals, standards, addendum, outp
     lines.push(configRef.content)
   }
 
+  if (brandRef) {
+    lines.push('')
+    lines.push(`BRAND [${brandRef.path}]`)
+    lines.push(brandRef.content)
+  }
+
   if (imageRefs.length) {
     lines.push('')
     lines.push('IMAGES')
@@ -560,6 +628,12 @@ function buildSectionContext({ task, archCtx, signals, standards, addendum, outp
     lines.push(companion.content)
   }
 
+  if (diffSource) {
+    lines.push('')
+    lines.push(`EXISTING COMPONENT [${diffSource.path}] — base; preserve what the task does not ask to change`)
+    lines.push(diffSource.content)
+  }
+
   lines.push('')
   lines.push('GENERATION INSTRUCTIONS')
   lines.push(addendum)
@@ -568,10 +642,16 @@ function buildSectionContext({ task, archCtx, signals, standards, addendum, outp
   lines.push('Begin with // FORGE NOTES then raw TSX. No markdown fences. No preamble after FORGE NOTES.')
   lines.push('Multiple files: separate with // --- FILE: relative/path/to/file.tsx')
 
+  if (verify) {
+    lines.push('')
+    lines.push('VERIFY: After writing the component, self-check and include in FORGE NOTES:')
+    lines.push('  // VERIFY: single default export ✓ | no named exports ✓ | null fallback ✓')
+  }
+
   return lines.join('\n')
 }
 
-function buildVariantContext({ task, archCtx, signals, standards, addendum, output, mode, paired }) {
+function buildVariantContext({ task, archCtx, signals, standards, addendum, output, mode, paired, verify }) {
   const { byRole } = signals
 
   // Under CONVERT_VARIANT, the interface file is classified as 'config' by loadRefs
@@ -580,6 +660,7 @@ function buildVariantContext({ task, archCtx, signals, standards, addendum, outp
   const interfaceRef = allConfigs.find(r => isInterfaceFile(r))
   const configRef = allConfigs.find(r => r !== interfaceRef)
   const imageRefs = byRole.image ?? []
+  const brandRef = byRole.brand?.[0]
 
   // Parse contract metadata (contract version + interface name)
   const rawInterface = interfaceRef?.rawLines?.join('\n') ?? interfaceRef?.content ?? ''
@@ -623,6 +704,12 @@ function buildVariantContext({ task, archCtx, signals, standards, addendum, outp
     lines.push(configRef.content)
   }
 
+  if (brandRef) {
+    lines.push('')
+    lines.push(`BRAND [${brandRef.path}]`)
+    lines.push(brandRef.content)
+  }
+
   if (imageRefs.length) {
     lines.push('')
     lines.push('IMAGES')
@@ -647,6 +734,17 @@ function buildVariantContext({ task, archCtx, signals, standards, addendum, outp
 
   if (output) lines.push(`WRITE OUTPUT TO: ${output}`)
   lines.push('Begin with // FORGE NOTES then raw TSX. No markdown fences. No preamble after FORGE NOTES.')
+
+  if (verify) {
+    lines.push('')
+    lines.push('VERIFY: After writing the component, include in FORGE NOTES:')
+    lines.push('  // CONTRACT CHECK: PASS  (or FAIL — <reason if failed>)')
+    lines.push('  Checks: single default export, no disallowed named exports, interface imported,')
+    lines.push('  all required props consumed, null fallback present for required props.')
+    if (output && interfaceRef) {
+      lines.push(`  Optionally run: node ${CLAUDE_SKILL_DIR}/scripts/verify.js ${output} ${interfaceRef.path}`)
+    }
+  }
 
   return lines.join('\n')
 }
@@ -761,6 +859,18 @@ ui-forge — Next.js component generator for Claude Code
   --signal   Force primary signal: CONVERT_SECTION, CONVERT_PAGE, CONVERT_VARIANT
   --mode     full (default) or body-only (requires --output to point at existing file)
   --a11y     Enable WCAG 2.1 AA enforcement (adds +A11Y modifier)
+  --creative Greenfield generation — relax ref requirement (adds +CREATIVE).
+             Refused under CONVERT_VARIANT, CONVERT_PAGE, and paired mode.
+  --diff     Iterative regeneration. Point at an existing component file;
+             the task describes the delta (adds +DIFF). --output defaults to
+             the --diff path. Refused with CONVERT_PAGE / CONVERT_VARIANT /
+             +CREATIVE.
+  --preview  Write forge-preview.html — styled HTML snapshot of the generation
+             context. Refused in StackShift-paired mode.
+  --verify   Require post-write verification. Adds CONTRACT CHECK requirement to
+             FORGE NOTES (CONVERT_VARIANT). Run verify.js separately for full check.
+  --validate-input  Pre-flight validate the incoming props interface file before
+             generating context. CONVERT_VARIANT only. Fails fast on malformed contract.
   --no-default-standards  Skip built-in fallback standards (arch + project only)
   --config   Load all params from JSON file
   --rescan   Re-run scan.js before generating
@@ -774,10 +884,13 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
   if (typeof params.refs === 'string')
     params.refs = params.refs.split(',').map(s => s.trim())
 
-  for (const flag of ['rescan', 'replan', 'a11y', 'no-default-standards'])
+  for (const flag of ['rescan', 'replan', 'a11y', 'creative', 'no-default-standards', 'preview', 'verify', 'validate-input'])
     if (params[flag] === 'true') params[flag] = true
-  // Normalise kebab-case flag → camelCase for internal use
+  // Normalise kebab-case flags → camelCase for internal use
   if (params['no-default-standards']) params.noDefaultStandards = true
+  const preview = params.preview === true
+  const verifyMode = params.verify === true
+  const validateInput = params['validate-input'] === true
 
   if (params.rescan) {
     process.stderr.write('ui-forge: re-scanning project...\n')
@@ -786,6 +899,12 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
 
   const arch = loadDesignArch()
   const paired = detectPairedMode()
+
+  // --preview refused in paired (StackShift) mode
+  if (preview && paired) {
+    process.stderr.write('Error: --preview is disabled in StackShift-paired mode. Use `next dev` or Sanity Studio section preview.\n')
+    process.exit(1)
+  }
   const a11yRequired = Boolean(
     params.a11y === true
     || params.a11y === 'true'
@@ -793,12 +912,82 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
     || (paired && paired.a11yRequired === true)
   )
   const classifiedRefs = loadRefs(params.refs ?? [])
-  const signals = detectSignals(params.task, classifiedRefs, params.signal, { a11y: a11yRequired })
+  const brandStandard = Boolean(arch.designStandards?.brand)
+  const creative = params.creative === true || params.creative === 'true'
+
+  // Resolve --diff: load the existing file and default --output to its path
+  let diffSource = null
+  if (params.diff && params.diff !== 'true') {
+    const diffFull = resolve(PROJECT_ROOT, params.diff)
+    if (!existsSync(diffFull))
+      throw new Error(`--diff file not found: ${params.diff}`)
+    diffSource = { path: params.diff, content: readFileSync(diffFull, 'utf-8') }
+    if (!params.output) params.output = params.diff
+  } else if (params.diff === 'true') {
+    throw new Error('--diff requires a path to an existing file (e.g. --diff ./components/Hero.tsx).')
+  }
+
+  const signals = detectSignals(params.task, classifiedRefs, params.signal, {
+    a11y: a11yRequired, creative, brandStandard, diff: Boolean(diffSource),
+  })
+
+  // --validate-input: pre-flight check on incoming contract file (CONVERT_VARIANT only)
+  if (validateInput) {
+    if (signals.primary !== 'CONVERT_VARIANT') {
+      process.stderr.write('Error: --validate-input requires CONVERT_VARIANT mode.\n')
+      process.exit(1)
+    }
+    const contractRef = classifiedRefs.find(r => isInterfaceFile(r))
+    if (!contractRef) {
+      process.stderr.write('Error: --validate-input: no valid props interface found in --refs.\n')
+      process.exit(1)
+    }
+    const rawIface = contractRef.rawLines?.join('\n') ?? contractRef.content
+    const ifaceNameCheck = parseInterfaceName(rawIface)
+    if (!ifaceNameCheck) {
+      process.stderr.write(`Error: --validate-input: could not extract interface name from ${contractRef.path}.\n`)
+      process.exit(1)
+    }
+    process.stderr.write(`ui-forge: input validation passed — interface: ${ifaceNameCheck} (${contractRef.path})\n`)
+  }
+
   const standards = loadDesignStandards(arch, { useBuiltins: !params.noDefaultStandards })
   const archCtx = archToContext(arch)
 
   if (paired)
     process.stderr.write(`ui-forge: paired-mode detected (stackshift ${paired.version})\n`)
+
+  // +CREATIVE refusal — contract/page always wins over creative latitude
+  if (signals.modifiers.includes('CREATIVE')) {
+    if (signals.primary === 'CONVERT_VARIANT') {
+      process.stderr.write('Error: +CREATIVE is incompatible with CONVERT_VARIANT — contract compliance always wins.\n')
+      process.exit(1)
+    }
+    if (signals.primary === 'CONVERT_PAGE') {
+      process.stderr.write('Error: +CREATIVE requires CONVERT_SECTION. Pass --signal CONVERT_SECTION or remove the layout ref.\n')
+      process.exit(1)
+    }
+    if (paired) {
+      process.stderr.write('Error: +CREATIVE is refused in paired (StackShift) mode — a contract is always supplied.\n')
+      process.exit(1)
+    }
+  }
+
+  // +DIFF refusal — iterative mode only composes with CONVERT_SECTION
+  if (signals.modifiers.includes('DIFF')) {
+    if (signals.primary === 'CONVERT_VARIANT') {
+      process.stderr.write('Error: +DIFF is incompatible with CONVERT_VARIANT — use --mode body-only for contract-level iteration.\n')
+      process.exit(1)
+    }
+    if (signals.primary === 'CONVERT_PAGE') {
+      process.stderr.write('Error: +DIFF requires CONVERT_SECTION. Page generation is two-stage; iterate sections one at a time.\n')
+      process.exit(1)
+    }
+    if (signals.modifiers.includes('CREATIVE')) {
+      process.stderr.write('Error: +DIFF is incompatible with +CREATIVE — surgical iteration vs. greenfield generation.\n')
+      process.exit(1)
+    }
+  }
 
   // Resolve mode: body-only is the default under CONVERT_VARIANT
   let mode = params.mode ?? (signals.primary === 'CONVERT_VARIANT' ? 'body-only' : 'full')
@@ -819,7 +1008,7 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
     const addendum = loadComposedAddendum(signals)
     process.stderr.write(`ui-forge: CONVERT_VARIANT${signals.modifiers.length ? ' +' + signals.modifiers.join(' +') : ''} [mode: ${mode}]\n`)
 
-    process.stdout.write(buildVariantContext({
+    const variantCtx = buildVariantContext({
       task: params.task,
       archCtx,
       signals,
@@ -828,7 +1017,15 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
       output: params.output,
       mode,
       paired,
-    }) + '\n')
+      verify: verifyMode,
+    })
+    process.stdout.write(variantCtx + '\n')
+
+    if (preview) {
+      const previewPath = join(PROJECT_ROOT, 'forge-preview.html')
+      writeFileSync(previewPath, generatePreviewHtml({ task: params.task, signals, archCtx, refs: classifiedRefs, paired, standards }), 'utf-8')
+      process.stderr.write(`ui-forge: preview written → ${previewPath}\n`)
+    }
     return
   }
 
@@ -853,6 +1050,12 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
       process.stdout.write(buildPageStage2Context({
         archCtx, signals, standards, addendum, plan, mainRef, outputDir,
       }) + '\n')
+
+      if (preview) {
+        const previewPath = join(PROJECT_ROOT, 'forge-preview.html')
+        writeFileSync(previewPath, generatePreviewHtml({ task: params.task, signals, archCtx, refs: classifiedRefs, paired, standards }), 'utf-8')
+        process.stderr.write(`ui-forge: preview written → ${previewPath}\n`)
+      }
       return
     }
 
@@ -873,7 +1076,15 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
     standards,
     addendum,
     output: params.output,
+    diffSource,
+    verify: verifyMode,
   }) + '\n')
+
+  if (preview) {
+    const previewPath = join(PROJECT_ROOT, 'forge-preview.html')
+    writeFileSync(previewPath, generatePreviewHtml({ task: params.task, signals, archCtx, refs: classifiedRefs, paired, standards }), 'utf-8')
+    process.stderr.write(`ui-forge: preview written → ${previewPath}\n`)
+  }
 }
 
 main()

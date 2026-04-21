@@ -12,6 +12,10 @@
  *   node ${CLAUDE_SKILL_DIR}/scripts/scan.js --quick                    (skip claude CLI synthesis; static analysis only)
  *   node ${CLAUDE_SKILL_DIR}/scripts/scan.js --ignore ./extra.ignore    (load an additional ignore file; repeatable)
  *   node ${CLAUDE_SKILL_DIR}/scripts/scan.js --no-default-ignore        (skip the built-in base ignore list)
+ *   node ${CLAUDE_SKILL_DIR}/scripts/scan.js --theme <name>             (seed baseline from themes/<name>.json; fills gaps only)
+ *   node ${CLAUDE_SKILL_DIR}/scripts/scan.js --schema-v4                (emit v4 schema with darkColorTokens; version-gated)
+ *
+ * Available themes: shadcn, mantine, plain-tailwind.
  *
  * Ignore precedence (last wins on conflict):
  *   built-in base → .gitignore → .agentic.ignore → .claude.ignore → .forgeignore → --ignore <file>
@@ -24,8 +28,13 @@
 import {
   readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync,
 } from 'fs'
-import { join, relative, extname } from 'path'
+import { join, relative, extname, dirname } from 'path'
+import { fileURLToPath } from 'url'
 import { spawnSync } from 'child_process'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const CLAUDE_SKILL_DIR = join(__dirname, '..')
+const THEMES_DIR = join(CLAUDE_SKILL_DIR, 'themes')
 
 const args = process.argv.slice(2)
 const flag = k => args.includes(k)
@@ -43,6 +52,8 @@ const PATCH_MODE = flag('--patch')
 const QUICK_MODE = flag('--quick')
 const NO_DEFAULT_IGNORE = flag('--no-default-ignore')
 const EXTRA_IGNORE_FILES = flagValAll('--ignore')
+const THEME_NAME = flagVal('--theme')
+const SCHEMA_V4 = flag('--schema-v4')
 const OUT_DIR = join(PROJECT_ROOT, 'design')
 const OUT_FILE = join(OUT_DIR, 'design-arch.json')
 const COMPONENT_USAGE_FILE = join(OUT_DIR, 'component-usage.json')
@@ -365,6 +376,91 @@ function findDesignStandards(isStackShift) {
   return standards
 }
 
+// ─── Theme starters ───────────────────────────────────────────────────────────
+
+function loadTheme(name) {
+  if (!name) return null
+  const file = join(THEMES_DIR, `${name}.json`)
+  if (!existsSync(file)) {
+    let available = []
+    try {
+      available = readdirSync(THEMES_DIR)
+        .filter(f => f.endsWith('.json'))
+        .map(f => f.replace(/\.json$/, ''))
+    } catch {}
+    process.stderr.write(
+      `Error: unknown --theme "${name}". Available: ${available.join(', ') || '(none found)'}\n`
+    )
+    process.exit(1)
+  }
+  try { return JSON.parse(readFileSync(file, 'utf-8')) }
+  catch (e) { process.stderr.write(`Error: could not parse theme "${name}": ${e.message}\n`); process.exit(1) }
+}
+
+// Fill gaps in arch with theme baselines. Scan data wins where present.
+function applyTheme(arch, theme) {
+  if (!theme) return arch
+  const out = { ...arch, _theme: theme._theme ?? THEME_NAME }
+
+  // componentLib — replace only if scan fell back to the single default
+  const defaulted = Array.isArray(arch.componentLib)
+    && arch.componentLib.length === 1
+    && arch.componentLib[0] === './components'
+  if (defaulted && Array.isArray(theme.componentLib) && theme.componentLib.length)
+    out.componentLib = theme.componentLib
+
+  // usedComponents — append theme hints (deduped) when scan found few
+  if (Array.isArray(theme.usedComponents) && theme.usedComponents.length
+      && (arch.usedComponents?.length ?? 0) < 5) {
+    const merged = new Set([...(arch.usedComponents ?? []), ...theme.usedComponents])
+    out.usedComponents = [...merged].sort()
+  }
+
+  // usedLibraries — append theme libs not already present
+  if (Array.isArray(theme.usedLibraries) && theme.usedLibraries.length) {
+    const seen = new Set((arch.usedLibraries ?? []).map(l => l.name))
+    const extras = theme.usedLibraries.filter(l => !seen.has(l.name))
+    if (extras.length) out.usedLibraries = [...(arch.usedLibraries ?? []), ...extras]
+  }
+
+  // tailwind.colorTokens — fill if empty
+  if (theme.tailwind?.colorTokens && !arch.tailwind?.colorTokens) {
+    out.tailwind = { ...(arch.tailwind ?? {}), colorTokens: theme.tailwind.colorTokens }
+  }
+
+  // patterns — fill only unknown/empty slots
+  const p = { ...(arch.patterns ?? {}) }
+  const tp = theme.patterns ?? {}
+  if (tp.spacing && (!p.spacing || p.spacing === 'unknown')) p.spacing = tp.spacing
+  if (tp.typography && (!p.typography || p.typography === 'unknown')) p.typography = tp.typography
+  if (Array.isArray(tp.conventions) && tp.conventions.length
+      && (!Array.isArray(p.conventions) || p.conventions.length === 0)) {
+    p.conventions = tp.conventions
+  }
+  out.patterns = p
+
+  return out
+}
+
+// ─── Dark-mode token extraction (schema v4) ───────────────────────────────────
+
+// Scans source files for dark: prefixed Tailwind utilities.
+// Called only when --schema-v4 is passed. Caps at 100 files for speed.
+function extractDarkTokens(files) {
+  const darkClasses = new Set()
+  const darkRe = /\bdark:([a-zA-Z0-9:/-]+)/g
+  for (const file of files.slice(0, 100)) {
+    let src
+    try { src = readFileSync(file, 'utf-8') } catch { continue }
+    let m
+    darkRe.lastIndex = 0
+    while ((m = darkRe.exec(src)) !== null)
+      darkClasses.add(m[1].split('[')[0])  // strip arbitrary values
+  }
+  const sorted = [...darkClasses].sort().slice(0, 60)
+  return sorted.length ? sorted.join(', ') : null
+}
+
 // ─── AI synthesis ─────────────────────────────────────────────────────────────
 
 const SYNTHESIS_PROMPT = (payload) => `Analyze this Next.js project's design system. Return ONLY valid JSON, no markdown.
@@ -416,6 +512,9 @@ function synthesize(payload, pkgCount) {
 function main() {
   process.stderr.write('ui-forge/scan: scanning project...\n')
 
+  const theme = loadTheme(THEME_NAME)
+  if (theme) process.stderr.write(`  applying theme starter: ${THEME_NAME}\n`)
+
   const ignore = loadIgnorePatterns()
   const files = collectSourceFiles(ignore)
   process.stderr.write(`  ${files.length} source files found\n`)
@@ -435,6 +534,9 @@ function main() {
   const topPackages = Object.entries(pkgCount)
     .sort((a, b) => b[1] - a[1]).slice(0, 25)
     .map(([k, v]) => `${k}(${v})`).join(', ')
+
+  const darkColorTokens = SCHEMA_V4 ? extractDarkTokens(files) : null
+  if (SCHEMA_V4) process.stderr.write(`  schema v4: dark token extraction ${darkColorTokens ? `found ${darkColorTokens.split(',').length} tokens` : 'no dark: classes found'}\n`)
 
   process.stderr.write('  synthesizing patterns...\n')
   const s = synthesize(
@@ -457,15 +559,23 @@ function main() {
     ? { ...discovered, ...existing.designStandards }
     : discovered
 
+  const tailwindField = tailwind
+    ? {
+        themeSection: tailwind.themeSection,
+        colorTokens: s.colorTokens,
+        ...(SCHEMA_V4 && darkColorTokens ? { darkColorTokens } : {}),
+      }
+    : null
+
   const arch = {
     ...existing,
-    _v: 3,  // Bump version
+    _v: SCHEMA_V4 ? 4 : 3,
     _scanned: new Date().toISOString(),
     isStackShift: s.isStackShift,
     componentLib: componentDirs,  // Now an array
     usedComponents,
     usedLibraries,
-    tailwind: tailwind ? { themeSection: tailwind.themeSection, colorTokens: s.colorTokens } : null,
+    tailwind: tailwindField,
     globalCss: globalCss ? globalCss.slice(0, 2000) : null,
     designStandards,  // object keyed by standard name → relative path
     patterns: {
@@ -476,6 +586,9 @@ function main() {
     },
   }
 
+  // Apply theme starter (fills gaps only; scan data wins)
+  const finalArch = applyTheme(arch, theme)
+
   // Generate component usage dictionary (separate file)
   const componentUsage = {
     _generated: new Date().toISOString(),
@@ -484,7 +597,7 @@ function main() {
 
   // Write both files
   if (!existsSync(OUT_DIR)) mkdirSync(OUT_DIR, { recursive: true })
-  writeFileSync(OUT_FILE, JSON.stringify(arch, null, 2), 'utf-8')
+  writeFileSync(OUT_FILE, JSON.stringify(finalArch, null, 2), 'utf-8')
   writeFileSync(COMPONENT_USAGE_FILE, JSON.stringify(componentUsage, null, 2), 'utf-8')
   process.stderr.write(`\nWritten: ${OUT_FILE}\n`)
   process.stderr.write(`Written: ${COMPONENT_USAGE_FILE}\n`)

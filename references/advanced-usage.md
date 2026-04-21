@@ -460,6 +460,146 @@ under ~3,000 characters — the injector truncates past that and warns.
 
 See `references/standards/README.md` for the full table.
 
+## Brand and Creative signals (0.1.5+)
+
+Two modifiers cover brand discipline and greenfield generation. Both compose
+with the standard signal stack.
+
+### `+BRAND` — brand-document-driven generation
+
+Triggered automatically when any ref's basename matches `/brand|voice|tone/i`,
+or when `arch.designStandards.brand` is set in `design-arch.json`.
+
+```bash
+# Brand guide alongside a layout reference
+node scripts/invoke.js \
+  --task "Convert hero" \
+  --refs ./hero.html,./BRAND.md \
+  --output ./components/Hero.tsx
+# → CONVERT_SECTION +BRAND
+```
+
+Authority split:
+
+| Decision | Authority |
+|---|---|
+| UI copy voice / tone | brand doc |
+| Brand colors and palette | brand doc |
+| Brand-mandated typography | brand doc |
+| Implementation tokens (tailwind classes, shadcn variants) | `design-arch.json` |
+| Spacing scale | `design-arch.json` |
+
+Brand colors are mapped onto existing design-arch tokens. When no close match
+exists, the AI records the divergence in a FORGE NOTES `BRAND` sub-block
+rather than inventing a new token.
+
+**Alternative activation** — put brand content in a design standard:
+
+```json
+{
+  "designStandards": {
+    "brand": "./design/standards/brand.md"
+  }
+}
+```
+
+The standard is injected via the three-layer standards pipeline (with a
+`# source: arch` marker) and `+BRAND` is still added to the signal stack, so
+the `SIGNAL_BRAND` addendum composes normally.
+
+### `+CREATIVE` — standalone-only greenfield mode
+
+Activated by `--creative` (or `creative: true` in a `--config` JSON). The
+addendum bundles the `// FORGE PHILOSOPHY` directive — restraint over
+ornament, earned hierarchy, and content-justified sections. No layout ref is
+required; the AI proposes composition itself.
+
+```bash
+node scripts/invoke.js \
+  --task "Design a trust/security hero for a fintech landing page" \
+  --creative \
+  --refs ./BRAND.md \
+  --output ./components/Hero.tsx
+# → CONVERT_SECTION +BRAND +CREATIVE
+```
+
+Refused (hard error, exit 1) when any of:
+
+- Primary signal resolves to `CONVERT_VARIANT` — contract compliance always
+  wins over creative latitude
+- Primary signal resolves to `CONVERT_PAGE` — page decomposition requires a
+  layout ref
+- Paired mode is detected (`.stackshift/installed.json` present) —
+  StackShift always supplies a contract
+
+Still binding under `+CREATIVE`:
+
+- All design-arch tokens (colors, spacing, typography)
+- Library swap rules (prefer `design-arch.usedComponents` / `usedLibraries`)
+- Anti-slop guardrail from `CONVERT_SECTION`
+
+The AI records rationale in a `CREATIVE` sub-block of FORGE NOTES: the
+composition reasoning, token judgment calls, and any section it declined to
+add (restraint shown as visible work).
+
+## Iterative regeneration (`+DIFF`, 0.1.6+)
+
+Surgical edits on an existing component file. The task describes the delta;
+the existing file is injected as the base. Activated by `--diff <path>`.
+
+```bash
+node scripts/invoke.js \
+  --task "Add a sticky CTA bar above the footer" \
+  --diff ./components/Hero.tsx
+# → CONVERT_SECTION +DIFF, --output defaults to ./components/Hero.tsx
+```
+
+Behaviour:
+
+- The existing file is injected as `EXISTING COMPONENT [path]` in the
+  generation context — the AI reads it as the base, not a reference.
+- `--output` defaults to the diff path, so the file is replaced in place.
+- FORGE NOTES is rewritten from scratch with a `DIFF` sub-block listing
+  what changed, what was preserved, and any token re-mappings.
+- Imports, exports, prop shapes, and handlers are preserved unless the
+  task asks otherwise.
+- The anti-slop guardrail still applies.
+
+Refused (hard error, exit 1) when:
+
+- Primary signal resolves to `CONVERT_VARIANT` — use `--mode body-only`
+  instead, which is the contract-level iteration flow.
+- Primary signal resolves to `CONVERT_PAGE` — page generation is a
+  two-stage pipeline; iterate sections one at a time.
+- `+CREATIVE` is also active — surgical iteration and greenfield
+  generation are mutually exclusive.
+
+## Theme starters (`scan.js --theme`, 0.1.6+)
+
+Seed `design-arch.json` from a preset bundled with the skill. Useful for
+fresh or greenfield projects where the scanner has little to detect yet.
+
+```bash
+node scripts/scan.js --theme shadcn          # Tailwind + shadcn/ui primitives
+node scripts/scan.js --theme mantine         # Mantine 7+
+node scripts/scan.js --theme plain-tailwind  # Vanilla Tailwind, no library
+```
+
+Merge is **gap-fill only** — scan data always wins. A theme fills:
+
+| Field | When the theme contributes |
+|---|---|
+| `componentLib` | Only if scan fell back to `['./components']` |
+| `usedComponents` | Appended when scan found fewer than ~5 |
+| `usedLibraries` | Appended for names not already detected |
+| `tailwind.colorTokens` | Only if scan produced an empty string |
+| `patterns.spacing` / `patterns.typography` | Only if synthesis returned `"unknown"` |
+| `patterns.conventions` | Only if synthesis produced an empty list |
+
+The applied theme is recorded as `arch._theme`. Unknown names fail fast
+with the available list printed to stderr. Drop the flag on a subsequent
+scan to remove the record.
+
 ## Advanced Signal Patterns
 
 ### Custom Signal Addition

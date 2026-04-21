@@ -1,16 +1,11 @@
 ---
 name: ui-forge
-version: 0.1.4
+version: 0.1.8
 description: >
-  Generates production-ready Next.js TSX components from prompts and reference
-  materials (HTML, TSX, images, JSON). Works standalone for any Next.js project
-  AND as the StackShift companion for Sanity-backed sites — accepts an
-  externally-owned props interface as its contract. Converts sections, pages,
-  and variants using project design standards with anti-slop aesthetic
-  guardrails and optional WCAG 2.1 AA accessibility enforcement. Triggers on:
-  "create component", "convert this HTML/TSX/page", "generate from image",
+  Generates production-ready Next.js TSX components from HTML, TSX, images, or JSON.
+  Triggers on: "create component", "convert this HTML/TSX/page", "generate from image",
   "implement this variant", or any frontend code generation request. Requires
-  design/design-arch.json (auto-created on first use).
+  design/design-arch.json (run scan.js to create).
 ---
 
 # UI Forge
@@ -101,6 +96,8 @@ node .claude/skills/ui-forge/scripts/invoke.js --task "Convert page" --refs ./pa
 | `--signal` | Force primary signal: `CONVERT_SECTION`, `CONVERT_PAGE`, `CONVERT_VARIANT`. Overrides auto-detection. |
 | `--mode` | `full` (default) or `body-only`. `body-only` requires `--output` to point at an existing file. Default is `body-only` when signal is `CONVERT_VARIANT`. |
 | `--a11y` | Enable `+A11Y` modifier — WCAG 2.1 AA enforcement. Auto-enabled when `arch.a11yRequired` or `.stackshift/installed.json` sets `a11yRequired: true`. |
+| `--creative` | Enable `+CREATIVE` modifier — greenfield generation without a layout ref. Standalone only; refused under `CONVERT_VARIANT`, `CONVERT_PAGE`, and paired mode. |
+| `--diff <path>` | Enable `+DIFF` modifier — iterative regeneration of an existing component. The task describes the delta; `--output` defaults to the same path. Refused under `CONVERT_VARIANT`, `CONVERT_PAGE`, and `+CREATIVE`. |
 | `--no-default-standards` | Skip built-in fallback standards (arch + project only). Also honoured by `"_useBuiltins": false` in `arch.designStandards`. |
 | `--rescan` | Re-run scan.js first |
 | `--replan` | Force Stage 1 re-run |
@@ -115,6 +112,7 @@ node .claude/skills/ui-forge/scripts/invoke.js --task "Convert page" --refs ./pa
 | `--quick` | Skip the `claude` CLI synthesis branch (static analysis only) |
 | `--ignore <file>` | Load an additional ignore file (repeatable) |
 | `--no-default-ignore` | Skip the built-in base ignore list |
+| `--theme <name>` | Seed `design-arch.json` from `themes/<name>.json`. Available: `shadcn`, `mantine`, `plain-tailwind`. Gap-fill only — scan-detected values always win. |
 
 ## Signals
 
@@ -129,20 +127,27 @@ node .claude/skills/ui-forge/scripts/invoke.js --task "Convert page" --refs ./pa
 **Modifiers (stackable):**
 - `+CONFIG` — JSON/data file present
 - `+IMAGE` — Image file present (read via vision capability)
+- `+BRAND` — Brand document attached (ref file matching `/brand|voice|tone/i`) or `arch.designStandards.brand` set. Enforces voice/tone and color discipline.
 - `+A11Y` — WCAG 2.1 AA enforcement (semantic HTML, headings, labels, contrast, focus, reduced motion). Activate via `--a11y`, `a11y` in config JSON, `a11yRequired: true` in `design-arch.json`, or `a11yRequired: true` in `.stackshift/installed.json` (paired mode).
+- `+CREATIVE` — Greenfield mode. No layout ref required; bundles the `// FORGE PHILOSOPHY` directive. **Standalone only** — refused under `CONVERT_VARIANT`, `CONVERT_PAGE`, and paired mode.
+- `+DIFF` — Surgical iteration on an existing file. Activated by `--diff <path>`; injects the existing component as a base and instructs the AI to preserve everything the task does not ask to change. **`CONVERT_SECTION` only** — refused under `CONVERT_VARIANT`, `CONVERT_PAGE`, and `+CREATIVE`.
 
 **Signal composition:**
 - `CONVERT_VARIANT` is mutually exclusive with `CONVERT_PAGE` (never compose)
-- `CONVERT_VARIANT` can compose with `+CONFIG` and `+IMAGE`
+- `CONVERT_VARIANT` can compose with `+CONFIG`, `+IMAGE`, `+BRAND`, `+A11Y` (never `+CREATIVE` / `+DIFF`)
+- `CONVERT_PAGE` can compose with `+BRAND`, `+A11Y` (never `+CREATIVE` / `+DIFF`)
+- `+DIFF` is `CONVERT_SECTION`-only and refuses to compose with `+CREATIVE`
 - If auto-detection would trigger both `CONVERT_VARIANT` and `CONVERT_PAGE`, the script exits with an error asking the caller to pass `--signal` explicitly
 
 **Examples:**
 - HTML → `CONVERT_SECTION`
 - HTML + JSON → `CONVERT_SECTION +CONFIG`
 - Image → `CONVERT_SECTION +IMAGE`
+- HTML + `brand.md` → `CONVERT_SECTION +BRAND`
+- `--creative` with no refs → `CONVERT_SECTION +CREATIVE`
 - Large HTML → `CONVERT_PAGE`
 - Props `.ts` file only → `CONVERT_VARIANT`
-- Props `.ts` file + JSON → `CONVERT_VARIANT +CONFIG`
+- Props `.ts` file + JSON + `brand.md` → `CONVERT_VARIANT +CONFIG +BRAND`
 
 ## Output Format
 
@@ -198,104 +203,47 @@ a props interface. In this mode:
 - Protocols declared in design-arch.json.designStandards are loaded and
   honored as the highest-priority standards
 
-See the caller's workflow documentation for the exact CLI invocation.
-ui-forge is stateless — every invocation is self-contained.
-
 ### Contract version tag (0.1.3+)
 
-Props interfaces may declare their contract version with a JSDoc tag:
-
-```ts
-/** @contract-version 1.0.0 */
-export interface PricingVariantProps {
-  title: string
-  tiers: { name: string; price: string }[]
-}
-```
-
-Absence defaults to `1.0.0`. UI Forge parses the tag, surfaces it in the
-`CONTRACT` header of the generation context, and warns on stderr when the
-version is not in its supported set.
+Declare `/** @contract-version 1.0.0 */` in the props interface JSDoc. Absence defaults to `1.0.0`. UI Forge parses the tag and surfaces it in the CONTRACT header; warns on stderr for unrecognised versions.
 
 ### Post-generation contract check (0.1.3+)
 
-After generating under `CONVERT_VARIANT`, run:
-
 ```bash
-node .claude/skills/ui-forge/scripts/validate-contract.js \
-  ./components/Pricing/Variant.tsx \
-  ./components/Pricing/types.ts
+node .claude/skills/ui-forge/scripts/validate-contract.js ./Variant.tsx ./types.ts
 ```
-
-The validator asserts: single default export, no disallowed named exports,
-contract imported (not redefined), all required props consumed, `null`
-fallback present, `?? undefined` used for optionals. Exit `1` on violations.
+Asserts single default export, no disallowed named exports, contract imported, all required props consumed, `null` fallback present. Exit `1` on violations (CI-usable). `verify.js` adds optional Playwright visual check.
 
 ### Paired-mode detection (0.1.3+)
 
-When `.stackshift/installed.json` exists, UI Forge logs the detected
-StackShift version to stderr, adds `PAIRED: stackshift x.y.z` to the output
-header, and honors the marker's `a11yRequired` field (auto-activates `+A11Y`).
+When `.stackshift/installed.json` exists, UI Forge adds `PAIRED: stackshift x.y.z` to the output header and honors `a11yRequired` (auto-activates `+A11Y`).
 
 ### Ignore files (0.1.4+)
 
-`scripts/scan.js` reads ignore patterns with gitignore-subset syntax
-(globstar `**`, leading `/` anchor, trailing `/` dir-only, `!` negation, `#`
-comments). Precedence, last wins on conflict:
-
-```
-built-in base → .gitignore → .agentic.ignore → .claude.ignore → .forgeignore → --ignore <file>
-```
-
-**`.forgeignore`** lives at the project root (same level as `.gitignore`). A
-copy-paste template ships at `references/default-forgeignore.txt` — it's empty
-by default so no files are silently excluded.
-
-```bash
-# Copy template into a project, then uncomment patterns
-cp .claude/skills/ui-forge/references/default-forgeignore.txt .forgeignore
-```
-
-Custom paths via `--ignore ./path/to/file` (repeatable). Skip the built-in
-base list with `--no-default-ignore`.
-
-Directory-boundary pruning is applied — if a directory matches an ignore
-pattern the walker does not descend into it at all.
+`scan.js` reads `.gitignore`, `.forgeignore`, and any `--ignore <file>`. Precedence: `built-in → .gitignore → .agentic.ignore → .claude.ignore → .forgeignore → --ignore`. Seed template: `cp .claude/skills/ui-forge/references/default-forgeignore.txt .forgeignore`. See `advanced-usage.md` for full syntax.
 
 ### Built-in design standards (0.1.4+)
 
-UI Forge can gap-fill the four canonical standard slots from skill-owned
-templates when the target project hasn't authored its own. Resolution order
-(last wins per key):
+Gap-fills `typography`, `spacing`, `color`, `a11y` slots from `design/standards/<key>.md` then skill-owned templates. Opt-out: `--no-default-standards` or `"_useBuiltins": false` in `designStandards`. See `advanced-usage.md` for resolution order and custom slots.
 
-1. **`arch.designStandards`** — explicit. Includes `stackshiftComponentStandard`.
-2. **Project override** — `PROJECT_ROOT/design/standards/<key>.md`, auto-registered by `scan.js`.
-3. **Built-in fallback** — `references/standards/<key>.md` (gap-fill only).
+### Brand and Creative signals (0.1.5+)
 
-Slots: `typography`, `spacing`, `color`, `a11y`. Templates ship **empty**
-(headings + HTML comments only) — the loader skips any template whose body is
-comments / headings, so a fresh install behaves exactly like 0.1.3.
+`+BRAND`: activates when a ref matches `/brand|voice|tone/i` or `arch.designStandards.brand` is set. `+CREATIVE`: activates via `--creative`; bundles `// FORGE PHILOSOPHY`. Refused under `CONVERT_VARIANT`, `CONVERT_PAGE`, and paired mode.
 
-Each injected standard block emits a source marker:
+### Diff signal (0.1.6+)
 
-```
-// --- STANDARD: typography ---
-# source: built-in
-...content...
-```
+`--diff <path>` activates `+DIFF` for surgical iteration on an existing file. Injects it as `EXISTING COMPONENT`; `--output` defaults to same path; FORGE NOTES gains a `DIFF` sub-block. Refused under `CONVERT_VARIANT`, `CONVERT_PAGE`, and `+CREATIVE`.
 
-**Opt-out:** `--no-default-standards` on `invoke.js`, or add
-`"_useBuiltins": false` inside `arch.designStandards`.
+### Theme starters (0.1.6+)
 
-**Extending:** see `references/standards/README.md` for the full table and
-guidance on filling in slots or adding custom ones.
+`scan.js --theme <name>` seeds `design-arch.json` from a preset. Available: `shadcn`, `mantine`, `plain-tailwind`. Gap-fill only — scan data wins.
 
 ## Advanced
 
 See `.claude/skills/ui-forge/references/` (adjust path to your install scope):
-- `advanced-usage.md` — Config files, custom signals, troubleshooting
-- `examples.md` — Real-world conversion examples
-- `prompt-patterns.md` — Signal composition patterns
+- `INDEX.md` — topic index with line ranges for targeted reads (use `Read offset/limit`)
+- `advanced-usage.md` — config files, custom signals, ignore patterns, troubleshooting
+- `prompt-patterns.md` — signal composition patterns
 - `versions.md` — Node, Next.js, StackShift, component library compatibility matrix
 
 **Requires:** Node.js >=18

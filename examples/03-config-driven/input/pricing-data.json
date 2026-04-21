@@ -1,0 +1,37 @@
+{
+  "_note": "CONFIG ref — defines the data shape the component receives as typed props",
+  "sectionTitle": "Simple, honest pricing",
+  "sectionSubtitle": "No hidden fees. Cancel anytime.",
+  "tiers": [
+    {
+      "name": "Starter",
+      "price": "$0",
+      "period": "/mo",
+      "highlighted": false,
+      "badge": null,
+      "features": ["3 projects", "5GB storage", "Community support"],
+      "ctaLabel": "Get started",
+      "ctaHref": "/signup"
+    },
+    {
+      "name": "Pro",
+      "price": "$49",
+      "period": "/mo",
+      "highlighted": true,
+      "badge": "Most popular",
+      "features": ["Unlimited projects", "100GB storage", "Priority support", "Team collaboration"],
+      "ctaLabel": "Start free trial",
+      "ctaHref": "/signup-pro"
+    },
+    {
+      "name": "Enterprise",
+      "price": "Custom",
+      "period": null,
+      "highlighted": false,
+      "badge": null,
+      "features": ["Everything in Pro", "SSO + SAML", "SLA guarantee", "Dedicated support"],
+      "ctaLabel": "Contact sales",
+      "ctaHref": "/contact"
+    }
+  ]
+}

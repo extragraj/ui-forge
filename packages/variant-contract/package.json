@@ -1,0 +1,12 @@
+{
+  "name": "@extragraj/variant-contract",
+  "version": "1.0.0",
+  "description": "UI Forge / StackShift variant contract spec and programmatic validator",
+  "type": "module",
+  "main": "./validate.js",
+  "exports": {
+    ".": "./validate.js"
+  },
+  "keywords": ["ui-forge", "stackshift", "variant-contract", "validator"],
+  "license": "MIT"
+}
