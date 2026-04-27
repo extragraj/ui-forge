@@ -10,12 +10,11 @@ Next.js component generator for Codex CLI, Claude Code, and other AI coding assi
 
 ## What is UI Forge?
 
-UI Forge is a Agentic Code skill that understands your project before generating anything. It scans your codebase to extract component libraries, Tailwind tokens, and design standards, then uses that context to produce components that fit your stack — not generic templates.
+UI Forge is an agentic code skill. When you ask your AI coding assistant to convert a component or generate from a reference, the skill activates, scans your project's design system, and prepares a structured generation context — your AI reads that context and writes the component using its own session. No separate API key or AI call is needed from the skill itself.
 
-- **Multi-input** — HTML templates, reference TSX, design images, JSON data shapes, or any combination
-- **Design-aware** — reads your `tailwind.config`, global CSS, and component standards to map tokens and swap library components
-- **Signal-based** — detects input type automatically and composes the right generation strategy
-- **Documented output** — every import swap, token mapping, and divergence is recorded in `FORGE NOTES`
+It understands your project before generating anything: component libraries, Tailwind tokens, design standards, and conventions are all read from `design/design-arch.json` (created by a one-time scan) and injected into the context. Every import swap, token mapping, and divergence is recorded in `FORGE NOTES` at the top of the generated file.
+
+Accepts any combination of input types — HTML templates, reference TSX, design images, JSON data shapes, or Claude Design handoff URLs. Designed with token optimization in mind: pre-processing, caching, and ref condensing keep every generation session lean.
 
 ## Installation
 
@@ -37,74 +36,36 @@ npx skills add extragraj/ui-forge -y -g -a codex -a claude-code
 | `-a <agent>` | Install for a specific agent runtime |
 
 
-## Quick Start
+## How It Works
 
-### 1. Resolve the installed skill root
+1. **Install the skill** — the Skills CLI registers UI Forge with your agent (see [Installation](#installation) below).
+2. **Scan once** — run `/forge-scan` (Claude Code) or `node "$SKILL_ROOT/scripts/scan.js"` (Codex CLI / other agents) to create `design/design-arch.json`. Re-run when you add libraries or update your Tailwind theme.
+3. **Ask your AI assistant** — describe what you want to build. The skill activates automatically, `invoke.js` prepares structured generation context, and your AI assistant generates the component in its own session.
 
-Run once per session in the target project:
+`invoke.js` is a context-preparation script — it never calls an AI API. Your coding assistant reads its output and does the generation.
 
-```bash
-SKILL_ROOT="$(sh ~/.agents/skills/ui-forge/scripts/detect.sh 2>/dev/null || sh ~/.claude/skills/ui-forge/scripts/detect.sh)"
+## Slash Commands (Claude Code)
 
-ls "$SKILL_ROOT/scripts/scan.js" && echo "SKILL_ROOT OK"
-```
+| Command | Description |
+|---------|-------------|
+| `/forge-scan` | Scan project → `design/design-arch.json` |
+| `/forge --task "..." --refs <path> --output <path>` | Prepare generation context; AI generates the component |
+| `/forge-verify <component.tsx> <contract.ts>` | Verify a generated component against its contract |
+| `/forge-export-design` | Export design system as a Claude Design–ingestible bundle |
 
-### 2. Scan your project
+Codex CLI and other agents use the bash form — see the **Advanced / Codex CLI** section in [SKILL.md](./SKILL.md).
 
-Run once to create `design/design-arch.json` — the design authority file that drives all generation.
+## Page Conversion (Two-Stage)
 
-```bash
-node "$SKILL_ROOT/scripts/scan.js"
-```
-
-This captures your component directories, used libraries, Tailwind tokens, global CSS, and any design standard documents. Re-run when you add new libraries, update your Tailwind theme, or change component standards.
-
-### 3. Generate a component
-
-```bash
-node "$SKILL_ROOT/scripts/invoke.js" \
-  --task "Convert hero section with CTA buttons" \
-  --refs ./hero.html \
-  --output ./components/Hero.tsx
-```
-
-UI Forge reads `design-arch.json`, classifies your reference, detects signals, and prints structured generation context to stdout. Your AI assistant reads that context and writes the component — no separate API call needed.
-
-**Example output:**
-
-```tsx
-// FORGE NOTES
-// Detected: HTML reference with Tailwind utilities
-// Project uses: shadcn/ui components
-// Swaps: <button> → Button (from @/components/ui/button)
-// Token mappings: bg-blue-600 → bg-primary
-// No conflicts detected
-
-import { Button } from '@/components/ui/button'
-
-export default function Hero() {
-  return (
-    <section className="py-20 px-4">
-      <h1 className="text-4xl font-bold">Welcome</h1>
-      <Button className="mt-6">Get Started</Button>
-    </section>
-  )
-}
-```
-
-### 4. Full page conversion (two-stage)
-
-For pages with multiple sections (>400 lines or when the task mentions "page"), UI Forge uses a two-stage pipeline.
+For pages with multiple sections (>400 lines or when the task mentions "page"), the AI uses a two-stage pipeline.
 
 **Stage 1 — Decompose the page:**
 
-```bash
-node "$SKILL_ROOT/scripts/invoke.js" \
-  --task "Convert landing page" \
-  --refs ./landing.html
+```
+/forge --task "Convert landing page" --refs ./landing.html
 ```
 
-Writes `design/forge-page-plan.json` and exits. Review the plan — set `existingProjectSection: true` on any sections you already have, adjust names or line ranges as needed.
+The AI writes `design/forge-page-plan.json`. Review the plan — set `existingProjectSection: true` on any sections you already have, adjust names or line ranges as needed.
 
 ```json
 {
@@ -117,13 +78,13 @@ Writes `design/forge-page-plan.json` and exits. Review the plan — set `existin
 
 **Stage 2 — Generate sections:**
 
-```bash
-node "$SKILL_ROOT/scripts/invoke.js" \
-  --task "Convert landing page" \
-  --refs ./landing.html
+```
+/forge --task "Convert landing page" --refs ./landing.html
 ```
 
 The plan file exists — UI Forge detects it and generates each `existingProjectSection: false` section sequentially. To discard the plan and restart Stage 1, pass `--replan`.
+
+> Codex CLI / other agents: replace `/forge` with `node "$SKILL_ROOT/scripts/invoke.js"`.
 
 ## Features
 
@@ -142,6 +103,7 @@ UI Forge classifies your inputs and composes the right strategy automatically:
 | `+A11Y` | `--a11y`, `a11yRequired` in design-arch or StackShift marker | WCAG 2.1 AA enforcement |
 | `+CREATIVE` | `--creative` (standalone only — refused under `CONVERT_VARIANT`, `CONVERT_PAGE`, and paired mode) | Greenfield generation without a layout ref; appends `// FORGE PHILOSOPHY` directive |
 | `+DIFF` | `--diff <path>` (`CONVERT_SECTION` only — refused under `CONVERT_VARIANT`, `CONVERT_PAGE`, `+CREATIVE`) | Surgical iteration: existing file injected as base; task describes the delta |
+| `+CLAUDE_DESIGN` | `--handoff <url>` or any ref under `design/.handoff-cache/` | Claude Design handoff mode: handoff wins for layout, design-arch wins for tokens |
 
 Signals stack — `CONVERT_SECTION + CONFIG + IMAGE + BRAND + A11Y` is a valid combination and composes all instructions. `+CREATIVE` is mutually exclusive with `CONVERT_VARIANT`, `CONVERT_PAGE`, and paired mode. `+DIFF` is `CONVERT_SECTION`-only and refuses to compose with `+CREATIVE`.
 
@@ -185,14 +147,57 @@ Point `design-arch.json` at any Markdown standards document and UI Forge will fo
 
 Standards inject automatically into the generation system prompt — no template variable needed.
 
+### Built-in Design Standards
+
+Four canonical standard slots ship with UI Forge: `typography`, `spacing`, `color`, and `a11y`. They are empty by default — fill them in to give the AI project-specific guidance that takes priority over anything in the reference file.
+
+**Option A — per-slot files (recommended):**
+
+```
+design/standards/
+├── typography.md
+├── spacing.md
+├── color.md
+└── a11y.md
+```
+
+Run `/forge-scan` after creating them. The scanner auto-registers each file and they inject into every generation automatically.
+
+**Option B — custom keys via `design-arch.json`:**
+
+```json
+"designStandards": {
+  "componentGuide": "./docs/component-guide.md",
+  "motion": "./design/motion.md"
+}
+```
+
+Custom keys are additive — they stack on top of the four canonical slots. Opt out of built-in fallbacks with `--no-default-standards` or `"_useBuiltins": false` in `design-arch.json`.
+
+See [Built-in Design Standards](./references/standards/README.md) for the full resolution order and template format.
+
+### Theme Starters
+
+For fresh or greenfield projects, seed `design-arch.json` from a built-in preset instead of waiting for the scanner to find enough to work with:
+
+```bash
+node "$SKILL_ROOT/scripts/scan.js" --theme shadcn          # Tailwind + shadcn/ui
+node "$SKILL_ROOT/scripts/scan.js" --theme mantine         # Mantine 7+
+node "$SKILL_ROOT/scripts/scan.js" --theme plain-tailwind  # Vanilla Tailwind
+```
+
+Or with the slash command: `/forge-scan --theme shadcn`
+
+Themes are **gap-fill only** — scan findings always win. A theme fills `componentLib`, `usedComponents`, `usedLibraries`, `colorTokens`, and `patterns.*` only when the scanner couldn't detect them. The applied theme is recorded as `arch._theme` in `design-arch.json`.
+
+See [Built-in Themes](./themes/README.md) for the full preset list and merge rules.
+
 ### Multiple Reference Inputs
 
 Pass any combination of file types together:
 
-```bash
-node "$SKILL_ROOT/scripts/invoke.js" \
-  --task "Build pricing table" \
-  --refs ./pricing.html,./tiers.json,./mockup.png
+```
+/forge --task "Build pricing table" --refs ./pricing.html,./tiers.json,./mockup.png
 ```
 
 **Resolution priority:** Design standards → `design-arch.json` → JSON (data shape) → HTML (layout) → Image (visual proportions)
@@ -234,104 +239,74 @@ Reference files are pre-processed before injection to stay within context limits
 
 ### Signal Detection and Context Composition
 
-`detectSignals()` classifies refs and determines primary signal + modifiers. `references/prompt-patterns.md` holds composable instruction blocks — `CONVERT_SECTION` provides the base addendum; `SIGNAL_CONFIG` and `SIGNAL_IMAGE` append addendum-only blocks. These are embedded in the `GENERATION INSTRUCTIONS` section of the stdout output that the AI reads.
+`detectSignals()` classifies refs and determines primary signal + modifiers. `references/prompt-patterns.md` holds composable instruction blocks — `CONVERT_SECTION` provides the base addendum; modifier signals append addendum-only blocks. These are embedded in the `GENERATION INSTRUCTIONS` section of the stdout output that the AI reads.
 
 To add a new signal: add a `## SIGNAL_NAME` block with a fenced `**System Addendum:**` section in `prompt-patterns.md`, then add detection logic in `detectSignals()`.
 
-## Token Optimization
+### Scripts
 
-UI Forge is built to minimize the context consumed by your AI session at every stage.
-
-| Optimization | Detail |
-|---|---|
-| Script generates zero AI tokens | `invoke.js` does all pre-processing locally; only the output context is consumed by the AI |
-| `prompt-patterns.md` cached | Read from disk once per run, not per section call |
-| Component scan O(files) | Single pass over all files vs. O(components × files) previously |
-| Page loop constants | Arch context and pattern computed once before the section loop |
-| Ref pre-processing | Style blocks, classNames, and imports extracted to compact headers; raw files never sent in full |
-| Images by path | Images are referenced by path and read via the AI's vision capability, not base64-encoded |
-
-**Context budget (AI session):**
-
-| Context | Est. tokens |
-|---------|------------|
-| Section generation | 3,000–5,000 |
-| Page Stage 1 (decomposition) | Varies with page length |
-| Page Stage 2 per section | 3,000–5,000 |
-
-Keep `design-arch.json` under 2,000 tokens — use excerpts, not full file contents. Use the two-stage pipeline for pages over 400 lines.
+| Script | What it does | When a developer runs it directly |
+|--------|-------------|-----------------------------------|
+| `scripts/scan.js` | Scans project → `design-arch.json` | Setup; again after adding libraries or updating Tailwind theme |
+| `scripts/invoke.js` | Prepares generation context → stdout | Run by the AI assistant via slash command; rarely needed directly |
+| `scripts/verify.js` | Static contract checks + optional Playwright screenshot | Post-generation spot-check, or wired as a PostToolUse hook |
+| `scripts/validate-contract.js` | `CONVERT_VARIANT` contract validator; exit 1 on violations | CI pipelines |
+| `scripts/fetch-handoff.js` | Fetches a Claude Design handoff URL → local refs | Invoked automatically via `--handoff`; can run standalone |
+| `scripts/export-design.js` | Exports `design-arch.json` → `design/claude-design-bundle/` | Before uploading to Claude Design |
+| `scripts/sync-version.mjs` | Syncs `skill.version` → `package.json`, `README.md`, `SKILL.md` | After editing `skill.version` |
 
 ## Companion Mode (StackShift Handoff)
 
-When StackShift scaffolds a variant file and hands off to UI Forge, the skill
-runs in contract-compliance mode:
+When StackShift scaffolds a variant file, it activates UI Forge in companion mode. The AI assistant receives a `CONVERT_VARIANT` context block and implements the component body against the externally-owned props contract — no manual invocation required.
 
-```bash
-node "$SKILL_ROOT/scripts/invoke.js" \
-  --task "Build pricing variant" \
-  --signal CONVERT_VARIANT \
-  --refs ./components/Pricing/types.ts \
-  --output ./components/Pricing/Variant.tsx
+The `CONVERT_VARIANT` signal is auto-detected when the ref is a `.ts`/`.tsx` props interface with no HTML or image layout ref. Using the slash command:
+
+```
+/forge --task "Build pricing variant" --refs ./components/Pricing/types.ts --output ./components/Pricing/Variant.tsx
 ```
 
-The props interface is the contract — UI Forge imports it rather than
-redefining it, destructures every prop, applies `?? undefined` to optionals,
-and returns `null` when required props are absent.
+The props interface is the contract — UI Forge imports it rather than redefining it, destructures every prop, applies `?? undefined` to optionals, and returns `null` when required props are absent.
 
-**Contract version tag** (`0.1.3+`) — declare the contract version as JSDoc:
+**Contract version tag** (`0.1.3+`) — declare the contract version as JSDoc in the interface file:
 
 ```ts
 /** @contract-version 1.0.0 */
 export interface PricingVariantProps { /* ... */ }
 ```
 
-**Post-generation validation** — run the contract validator after generating:
+**Post-generation validation** — verify the output against the contract:
 
-```bash
-node scripts/validate-contract.js \
-  ./components/Pricing/Variant.tsx \
-  ./components/Pricing/types.ts
+```
+/forge-verify ./components/Pricing/Variant.tsx ./components/Pricing/types.ts
 ```
 
-Exit `1` on violations (missing default export, disallowed named exports,
-required props not consumed, missing `null` fallback). Suitable for CI.
+Or run directly for CI:
 
-**Paired-mode detection** — if `.stackshift/installed.json` exists, UI Forge
-logs the StackShift version, surfaces it in the generation context, and auto-
-activates `+A11Y` when the marker's `a11yRequired` field is `true`.
+```bash
+node scripts/validate-contract.js ./components/Pricing/Variant.tsx ./components/Pricing/types.ts
+```
 
-## Accessibility (`+A11Y`)
+Exit `1` on violations (missing default export, disallowed named exports, required props not consumed, missing `null` fallback).
 
-Activate WCAG 2.1 AA enforcement with `--a11y`, or make it project-wide by
-adding `"a11yRequired": true` to `design/design-arch.json`. Rules enforced:
-
-- Semantic HTML (`<section>`, `<nav>`, `<main>` — never unlabelled `<div>`)
-- Valid heading outline (one `<h1>`, no level skips)
-- Accessible names for every interactive element
-- Alt text on every `<img>` (explicit `alt=""` for decorative)
-- Labels on every form input
-- Visible focus states (`:focus-visible` not overridden without alternative)
-- Contrast ratios meet AA
-- 44×44px tap targets
-- `prefers-reduced-motion` honored
-
-Concerns that can't be resolved from the reference/contract are surfaced in
-the FORGE NOTES `A11Y` sub-block as judgment calls.
+**Paired-mode detection** — if `.stackshift/installed.json` exists, UI Forge logs the StackShift version, surfaces it in the generation context, and auto-activates `+A11Y` when the marker's `a11yRequired` field is `true`.
 
 ## Documentation
 
 - **[SKILL.md](./SKILL.md)** — Complete skill reference: signals, CLI flags, output format, resolution priority
-- **[Advanced Usage](./references/advanced-usage.md)** — Custom signals, troubleshooting, CI/CD integration
+- **[Advanced Usage](./references/advanced-usage.md)** — PostToolUse auto-verify hook, custom signals, troubleshooting, CI/CD integration
 - **[Examples](./references/examples.md)** — Real-world conversion walkthroughs with full outputs
 - **[Prompt Patterns](./references/prompt-patterns.md)** — Signal composition reference for extending UI Forge
+- **[Built-in Themes](./themes/README.md)** — Available theme starters (`shadcn`, `mantine`, `plain-tailwind`), merge behavior, and how to apply via `scan.js --theme <name>`
+- **[Built-in Design Standards](./references/standards/README.md)** — Four canonical standard slots (`typography`, `spacing`, `color`, `a11y`), resolution order, and how to author project-local overrides
 - **[Versions](./references/versions.md)** — Node, Next.js, StackShift, component library compatibility matrix
 
-**CLI flags:**
+**CLI flags** (passed to `/forge` in Claude Code, or directly to `invoke.js` in Codex CLI / other agents):
 
 | Flag | Description |
 |------|-------------|
-| `--task` | What to build (required) |
+| `--task` | What to build (required unless `--handoff` provides a README heading) |
 | `--refs` | Comma-separated reference file paths |
+| `--handoff <url>` | Claude Design handoff URL — fetches refs automatically, adds `+CLAUDE_DESIGN` |
 | `--output` | Write result to file path |
 | `--signal` | Force primary signal: `CONVERT_SECTION`, `CONVERT_PAGE`, `CONVERT_VARIANT` |
 | `--mode` | `full` (default) or `body-only`. Default is `body-only` under `CONVERT_VARIANT`. |
@@ -360,6 +335,10 @@ Full release notes are in [`change-logs/`](./change-logs/).
 
 | Version | Date | Notes |
 |---------|------|-------|
+| [0.1.9D](./change-logs/0-1-9D-claude-design-integration.md) | 2026-04-27 | Claude Design integration: `--handoff <url>` fetches handoffs and generates with `+CLAUDE_DESIGN` token remapping; `/forge-export-design` exports `design-arch.json` as an ingestible bundle for Claude Design onboarding |
+| [0.1.9C](./change-logs/0-1-9C-plan-validation-and-fallback-warning.md) | 2026-04-27 | `validatePagePlan()` in `invoke.js` validates `forge-page-plan.json` schema before Stage 2 and exits with a clear per-field error; `scan.js` now emits a loud banner on stderr whenever AI synthesis falls back to static analysis |
+| [0.1.9B](./change-logs/0-1-9B-auto-verify-hook.md) | 2026-04-27 | `verify.js` single-arg mode with `// @contract <path>` auto-detection; PostToolUse hook snippet for automatic contract verification on every component write; `SIGNAL_VARIANT` FORGE NOTES template updated with machine-readable directive |
+| [0.1.9A](./change-logs/0-1-9A-slash-commands.md) | 2026-04-27 | Slash commands for Claude Code: `/forge-scan`, `/forge`, `/forge-verify` via `$CLAUDE_PLUGIN_ROOT`; `SKILL.md` restructured to lead with slash commands and demote bash invocations to an Advanced / Codex CLI section |
 | [0.1.9](./change-logs/0-1-9-cross-agent-skill-root-compatibility.md) | 2026-04-27 | Cross-agent compatibility fix: new `scripts/detect.sh` resolves the installed skill root across Codex CLI and Claude Code, and `SKILL.md` now uses `SKILL_ROOT`-based commands with an explicit path-resolution step |
 | [0.1.8](./change-logs/0-1-8-token-optimization.md) | 2026-04-21 | Token optimization: SKILL.md body compressed (~1,800 tokens/activation saved), `prompt-patterns.md` addenda condensed (`CONVERT_SECTION` +`SIGNAL_A11Y` +`SIGNAL_BRAND`), `archToContext()` caps tightened, `extractBlock()` memoized, `references/INDEX.md` added for targeted on-demand reads |
 | [0.1.7](./change-logs/0-1-7-examples-preview-verify-darkmode-contract.md) | 2026-04-21 | Golden conversion examples (`examples/`), `--preview` (HTML context snapshot; standalone only), `--verify` + `scripts/verify.js` (static contract checks + Playwright), `--validate-input` pre-flight, `scan.js --schema-v4` dark-mode token extraction, `packages/variant-contract/` shared validator module |

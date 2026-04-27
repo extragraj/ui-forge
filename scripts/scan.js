@@ -475,10 +475,25 @@ TOP PACKAGES (by import count):\n${payload.topPackages}
 Return this JSON shape exactly:
 {"spacing":"<1-2 sentences: dominant section/container padding pattern>","typography":"<1-2 sentences: font usage and heading patterns>","colorTokens":"<comma-separated key token names>","conventions":["<up to 5 short conventions>"],"isStackShift":<true|false>}`
 
+function warnSynthesisFallback(reason) {
+  const bar = '═'.repeat(70)
+  process.stderr.write(`\n${bar}\n`)
+  process.stderr.write(`[ui-forge] WARNING: AI synthesis fell back to static analysis\n`)
+  process.stderr.write(`  Reason: ${reason}\n`)
+  process.stderr.write(`  Effect: design-arch.json patterns.spacing / typography / conventions\n`)
+  process.stderr.write(`          will be 'unknown' or coarse heuristics.\n`)
+  process.stderr.write(`  Fix:    ensure 'claude' CLI is on PATH, then re-run scan,\n`)
+  process.stderr.write(`          or pass --quick to skip synthesis silently.\n`)
+  process.stderr.write(`${bar}\n\n`)
+}
+
 function tryClaudeCLI(payload) {
   // Check if claude CLI is available (Claude Code, Cursor, AntiGravity, etc.)
   const check = spawnSync('claude', ['--version'], { encoding: 'utf-8', stdio: 'pipe' })
-  if (check.error || check.status !== 0) return null
+  if (check.error || check.status !== 0) {
+    warnSynthesisFallback('claude CLI not found')
+    return null
+  }
 
   process.stderr.write('  using claude CLI for synthesis\n')
   const prompt = SYNTHESIS_PROMPT(payload)
@@ -487,10 +502,23 @@ function tryClaudeCLI(payload) {
     ['-p', prompt, '--model', 'claude-haiku-4-5-20251001', '--output-format', 'text'],
     { encoding: 'utf-8', stdio: 'pipe', timeout: 45000, maxBuffer: 512 * 1024 }
   )
-  if (result.error || result.status !== 0) return null
+  if (result.error) {
+    const reason = result.error?.code === 'ETIMEDOUT'
+      ? 'claude CLI timed out after 45s'
+      : `claude CLI error: ${result.error.message}`
+    warnSynthesisFallback(reason)
+    return null
+  }
+  if (result.status !== 0) {
+    warnSynthesisFallback(`claude CLI exited with code ${result.status}`)
+    return null
+  }
   try {
     return JSON.parse(result.stdout.trim().replace(/```json|```/g, '').trim())
-  } catch { return null }
+  } catch {
+    warnSynthesisFallback('claude CLI returned unparseable JSON')
+    return null
+  }
 }
 
 function staticFallback(pkgCount) {

@@ -600,6 +600,75 @@ The applied theme is recorded as `arch._theme`. Unknown names fail fast
 with the available list printed to stderr. Drop the flag on a subsequent
 scan to remove the record.
 
+## Auto-verify hook (PostToolUse)
+
+Automatically run `verify.js` whenever Claude writes or edits a `.tsx` file, so contract violations surface immediately — no manual step required.
+
+### How it works
+
+The hook fires on every `Write` or `Edit` tool call. `verify.js` silently ignores non-TSX files and any TSX file that does not begin with `// FORGE NOTES`. For UI Forge variant outputs it reads the `// @contract <path>` directive written in the FORGE NOTES header and runs a full contract check automatically.
+
+### Setup
+
+Add the following to your project's `.claude/settings.json` (create the file if it does not exist):
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PLUGIN_ROOT/scripts/verify.js\" \"$CLAUDE_TOOL_INPUT_file_path\" 2>&1 | head -40"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### Contract auto-detection
+
+`verify.js` resolves the contract path from a `// @contract <path>` line in the first 30 lines of the output file. UI Forge writes this automatically for every `CONVERT_VARIANT` output. If you are using `verify.js` against a manually authored component, add the directive yourself:
+
+```tsx
+// FORGE NOTES
+// Signal: CONVERT_VARIANT
+// @contract ./types/HeroVariant.ts
+// ...
+```
+
+If the directive is absent, `verify.js` exits 0 with a stderr note — it will not block writes to non-variant components.
+
+### Behaviour matrix
+
+| File written | Contains `// FORGE NOTES` | Has `// @contract` | Result |
+|---|---|---|---|
+| Non-`.tsx` file | — | — | Silent exit 0 |
+| `.tsx`, no FORGE NOTES | No | — | Silent exit 0 |
+| `.tsx`, FORGE NOTES, no `@contract` | Yes | No | Stderr note, exit 0 |
+| `.tsx`, FORGE NOTES, `@contract` present | Yes | Yes | Full contract check; exit 1 on violation |
+
+### Manual invocation (two-arg form)
+
+You can still run verify.js directly with an explicit contract path:
+
+```bash
+node scripts/verify.js ./components/Variant.tsx ./types/HeroVariant.ts
+node scripts/verify.js ./components/Variant.tsx ./types/HeroVariant.ts --playwright http://localhost:3000
+```
+
+Or via slash command:
+
+```
+/forge-verify ./components/Variant.tsx ./types/HeroVariant.ts
+```
+
+---
+
 ## Advanced Signal Patterns
 
 ### Custom Signal Addition

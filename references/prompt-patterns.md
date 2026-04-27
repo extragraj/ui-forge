@@ -132,6 +132,7 @@ Begin your response with // FORGE NOTES. The notes MUST include a CONTRACT sub-b
 
   // FORGE NOTES
   // Signal: CONVERT_VARIANT
+  // @contract <contract file path>
   // Anti-slop: verified (no generic gradients, no filler CTAs, density matches contract)
   //
   // CONTRACT
@@ -288,6 +289,32 @@ In FORGE NOTES, add a DIFF sub-block listing:
   - What changed (one line per region touched)
   - What was deliberately preserved (prop shape, imports, handlers)
   - Any re-mapped tokens (old → new) with justification
+```
+
+---
+
+## SIGNAL_CLAUDE_DESIGN
+
+Addendum-only. Appended after the base addendum when a Claude Design handoff is active.
+Triggered by `--handoff <url>` on `invoke.js`, or when any ref path is under
+`design/.handoff-cache/`.
+
+**System Addendum:**
+```
+CLAUDE_DESIGN SIGNAL — this generation uses a Claude Design handoff as a reference.
+
+Authority split:
+  - Visual layout and composition → Claude Design handoff (treat as the authoritative visual spec)
+  - Colors, spacing, typography tokens → design-arch.json (always remap; never inline Claude Design's generated classes)
+  - If a tokens.json sibling is present, prefer its token values over project defaults only
+    when a token is genuinely absent from design-arch.json — document any such use in FORGE NOTES.
+
+In FORGE NOTES, add a CLAUDE_DESIGN sub-block:
+  // CLAUDE_DESIGN
+  //   source: <handoff URL or cache path>
+  //   task: <README heading or user-provided task>
+  //   token remappings: <Claude Design value → design-arch token, for each color/spacing divergence>
+  //   layout preserved: <key structural choices taken from the handoff>
 ```
 
 ---

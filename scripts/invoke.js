@@ -37,6 +37,7 @@ import {
 import { join, resolve, extname, basename, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { spawnSync } from 'child_process'
+import { createHash } from 'crypto'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PROJECT_ROOT = process.cwd()
@@ -469,6 +470,7 @@ function detectSignals(task, classifiedRefs, explicitSignal, opts = {}) {
     return acc
   }, {})
 
+  const isHandoff = opts.handoff || classifiedRefs.some(r => r.path.includes('.handoff-cache'))
   const modifiers = [
     ...(byRole.config?.length ? ['CONFIG'] : []),
     ...(byRole.image?.length ? ['IMAGE'] : []),
@@ -476,6 +478,7 @@ function detectSignals(task, classifiedRefs, explicitSignal, opts = {}) {
     ...(opts.a11y ? ['A11Y'] : []),
     ...(opts.creative ? ['CREATIVE'] : []),
     ...(opts.diff ? ['DIFF'] : []),
+    ...(isHandoff ? ['CLAUDE_DESIGN'] : []),
   ]
 
   // Explicit --signal override
@@ -849,12 +852,41 @@ function main() {
     delete params.config
   }
 
+  // --handoff: fetch a Claude Design handoff URL and populate refs before task resolution
+  if (params.handoff) {
+    const urlHash = createHash('sha256').update(String(params.handoff)).digest('hex').slice(0, 12)
+    const tmpDir = join(PROJECT_ROOT, 'design', '.handoff-cache', urlHash)
+    const r = spawnSync(process.execPath, [join(__dirname, 'fetch-handoff.js'), params.handoff, tmpDir], { stdio: 'inherit' })
+    if (r.status !== 0) process.exit(r.status ?? 1)
+    // Auto-populate refs from what fetch-handoff materialized
+    const fetched = ['design.html', 'README.md', 'tokens.json']
+      .map(f => join(tmpDir, f))
+      .filter(f => existsSync(f))
+    if (params.refs) {
+      const existing = typeof params.refs === 'string' ? params.refs.split(',').map(s => s.trim()) : params.refs
+      params.refs = [...existing, ...fetched]
+    } else {
+      params.refs = fetched
+    }
+    // Derive task from README.md first heading when --task is not provided
+    if (!params.task) {
+      const readmePath = join(tmpDir, 'README.md')
+      if (existsSync(readmePath)) {
+        const md = readFileSync(readmePath, 'utf-8')
+        const m = md.match(/^#\s+(.+)$/m)
+        if (m) params.task = `Implement the Claude Design handoff: ${m[1].trim()}`
+      }
+    }
+  }
+
   if (!params.task) {
     process.stderr.write(`
 ui-forge — Next.js component generator for Claude Code
 
-  --task     What to build (required)
+  --task     What to build (required unless --handoff provides a README heading)
   --refs     Comma-separated ref files (HTML, TSX, JSON, image, markdown)
+  --handoff  Claude Design handoff URL — fetches and materializes refs automatically
+             (adds +CLAUDE_DESIGN modifier; --task derived from README if omitted)
   --output   Target output file path (Claude will write here)
   --signal   Force primary signal: CONVERT_SECTION, CONVERT_PAGE, CONVERT_VARIANT
   --mode     full (default) or body-only (requires --output to point at existing file)
@@ -929,6 +961,7 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
 
   const signals = detectSignals(params.task, classifiedRefs, params.signal, {
     a11y: a11yRequired, creative, brandStandard, diff: Boolean(diffSource),
+    handoff: Boolean(params.handoff),
   })
 
   // --validate-input: pre-flight check on incoming contract file (CONVERT_VARIANT only)
@@ -1030,6 +1063,33 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
   }
 
   // ── CONVERT_PAGE ────────────────────────────────────────────────────────────
+  function validatePagePlan(plan, planPath) {
+    const errors = []
+    if (!plan || typeof plan !== 'object') errors.push('plan must be an object')
+    if (!Array.isArray(plan.sections)) errors.push('plan.sections must be an array')
+    else {
+      plan.sections.forEach((s, i) => {
+        const p = `sections[${i}]`
+        if (!s || typeof s !== 'object') { errors.push(`${p} must be an object`); return }
+        if (typeof s.name !== 'string' || !s.name.trim()) errors.push(`${p}.name must be a non-empty string`)
+        if (typeof s.type !== 'string' || !s.type.trim()) errors.push(`${p}.type must be a non-empty string`)
+        if (!Array.isArray(s.lines) || s.lines.length !== 2 || !s.lines.every(n => Number.isInteger(n) && n >= 0)) {
+          errors.push(`${p}.lines must be [start, end] with non-negative integers`)
+        } else if (s.lines[0] > s.lines[1]) {
+          errors.push(`${p}.lines: start (${s.lines[0]}) must be <= end (${s.lines[1]})`)
+        }
+        if (s.existingProjectSection !== undefined && typeof s.existingProjectSection !== 'boolean')
+          errors.push(`${p}.existingProjectSection must be boolean if present`)
+      })
+    }
+    if (errors.length) {
+      process.stderr.write(`\n[ui-forge] Invalid page plan at ${planPath}:\n`)
+      errors.forEach(e => process.stderr.write(`  - ${e}\n`))
+      process.stderr.write(`\nFix the file and re-run, or delete it and pass --replan to regenerate Stage 1.\n\n`)
+      process.exit(1)
+    }
+  }
+
   if (signals.primary === 'CONVERT_PAGE') {
     const mainRef = signals.byRole.reference?.[0]
     if (!mainRef) throw new Error('CONVERT_PAGE requires a layout reference file')
@@ -1037,6 +1097,7 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
     // Stage 2 — plan file exists
     if (existsSync(PLAN_PATH) && !params.replan) {
       const plan = JSON.parse(readFileSync(PLAN_PATH, 'utf-8'))
+      validatePagePlan(plan, PLAN_PATH)
       if (plan._ref && plan._ref !== mainRef.path)
         process.stderr.write(`ui-forge: WARNING — plan was created for "${plan._ref}" but current ref is "${mainRef.path}".\nPass --replan to regenerate the plan for the current file.\n`)
 

@@ -36,19 +36,37 @@ const STACKSHIFT_MARKER = join(PROJECT_ROOT, '.stackshift', 'installed.json')
 const args = process.argv.slice(2)
 const positional = args.filter(a => !a.startsWith('--'))
 const outputArg = positional[0]
-const contractArg = positional[1]
+let contractArg = positional[1]
 const playwrightIdx = args.indexOf('--playwright')
 const playwrightUrl = playwrightIdx !== -1 && args[playwrightIdx + 1] && !args[playwrightIdx + 1].startsWith('--')
   ? args[playwrightIdx + 1] : null
 const usePlaywright = playwrightIdx !== -1
 
-if (!outputArg || !contractArg) {
+if (!outputArg) {
   process.stderr.write(
     'Usage: verify.js <output-file> <contract-file> [--playwright <url>]\n\n' +
     'Options:\n' +
     '  --playwright <url>  Screenshot component at <url> (requires: npx playwright install)\n'
   )
   process.exit(2)
+}
+
+// Single-arg mode: invoked by PostToolUse hook with only the written file path.
+// Auto-detect contract from a // @contract <path> directive in the first 30 lines of FORGE NOTES.
+if (!contractArg) {
+  // Silently skip non-TSX files — hook fires on every Write/Edit
+  if (!outputArg.endsWith('.tsx')) process.exit(0)
+  const candidatePath = resolve(PROJECT_ROOT, outputArg)
+  if (!existsSync(candidatePath)) process.exit(0)
+  const head = readFileSync(candidatePath, 'utf-8').split('\n').slice(0, 30).join('\n')
+  // Silently skip files that are not UI Forge outputs
+  if (!head.includes('// FORGE NOTES')) process.exit(0)
+  const m = head.match(/\/\/\s*@contract\s+(\S+)/)
+  if (!m) {
+    process.stderr.write('verify.js: no contract path; add // @contract <path> to FORGE NOTES or pass it explicitly. Skipping.\n')
+    process.exit(0)
+  }
+  contractArg = m[1]
 }
 
 const outputPath = resolve(PROJECT_ROOT, outputArg)

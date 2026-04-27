@@ -60,6 +60,9 @@ node scripts/invoke.js --task "Design a trust hero for a fintech site" --creativ
 # Iterative surgical edit (+DIFF; CONVERT_SECTION only)
 node scripts/invoke.js --task "Add a sticky CTA bar above the footer" --diff ./components/Hero.tsx
 
+# Claude Design handoff (+CLAUDE_DESIGN; fetches URL, materializes refs, remaps to project tokens)
+node scripts/invoke.js --handoff https://claude.ai/design/h/<id> --output ./components/Hero.tsx
+
 # Preview — write forge-preview.html (styled context snapshot; standalone mode only)
 node scripts/invoke.js --task "..." --refs ./ref.html --preview
 
@@ -77,9 +80,19 @@ node scripts/scan.js --theme plain-tailwind
 # Post-generation contract validator (CONVERT_VARIANT output)
 node scripts/validate-contract.js ./Variant.tsx ./types.ts
 
-# Post-generation verifier — static contract checks + optional Playwright screenshot
+# Post-generation verifier — two-arg form (explicit contract path)
 node scripts/verify.js ./Variant.tsx ./types.ts
 node scripts/verify.js ./Variant.tsx ./types.ts --playwright http://localhost:3000
+
+# Post-generation verifier — single-arg form (auto-detects contract from // @contract directive)
+node scripts/verify.js ./Variant.tsx
+
+# Fetch a Claude Design handoff URL and materialize refs (standalone)
+node scripts/fetch-handoff.js https://claude.ai/design/h/<id> ./design/.handoff-cache/my-handoff
+
+# Export design-arch.json as a Claude Design–ingestible bundle
+node scripts/export-design.js
+node scripts/export-design.js ./custom-out-dir
 
 # Sync version across all files after editing skill.version
 node scripts/sync-version.mjs
@@ -87,20 +100,33 @@ node scripts/sync-version.mjs
 
 `npm run scan` and `npm run generate` are shortcuts defined in `package.json`.
 
+### Slash commands (Claude Code only)
+
+```
+/forge-scan [--theme shadcn|mantine|plain-tailwind] [--schema-v4] [--quick]
+/forge --task "<task>" --refs <path[,path]> --output <path>
+/forge-verify <component.tsx> <contract.ts> [--playwright <url>]
+/forge-export-design [out-dir]
+```
+
+All slash commands route through `$CLAUDE_PLUGIN_ROOT` and pass `$ARGUMENTS` through, so every flag works unchanged. Codex CLI uses the bash form with `$SKILL_ROOT` instead.
+
 ## Architecture
 
-### Three entry points
+### Entry points
 
-- **`scripts/scan.js`** — Scans the *target* project (cwd), writes `design/design-arch.json` (v3/v4 schema) and `design/component-usage.json`. AI synthesis uses the `claude` CLI first, then static fallback. No API key needed. Pass `--schema-v4` to extract dark-mode color tokens into `tailwind.darkColorTokens`.
-- **`scripts/invoke.js`** — Reads `design/design-arch.json`, classifies refs, detects signals, composes structured context, and prints to stdout. No API calls. AI assistant reads output and generates the component. Auto-migrates v3→v4 schema on read.
+- **`scripts/scan.js`** — Scans the *target* project (cwd), writes `design/design-arch.json` (v3/v4 schema) and `design/component-usage.json`. AI synthesis uses the `claude` CLI first, then static fallback. No API key needed. Pass `--schema-v4` to extract dark-mode color tokens into `tailwind.darkColorTokens`. When the `claude` CLI is unavailable or fails, emits a loud `═`-bordered banner on stderr explaining the fallback and its effect on `patterns.*` fields. Suppressed by `--quick`.
+- **`scripts/invoke.js`** — Reads `design/design-arch.json`, classifies refs, detects signals, composes structured context, and prints to stdout. No API calls. AI assistant reads output and generates the component. Auto-migrates v3→v4 schema on read. `--handoff <url>` spawns `fetch-handoff.js`, populates refs from the cache, and derives `--task` from the handoff README heading. `CONVERT_PAGE` Stage 2 validates `forge-page-plan.json` with `validatePagePlan()` before processing — exits 1 with per-field errors on malformed plans.
 - **`scripts/validate-contract.js`** — Post-generation contract validator for `CONVERT_VARIANT` outputs. Heuristic/regex-based (no TypeScript compiler dependency). Reports violations: extra exports, missing destructures, missing `null` fallback, `?? null` for optionals. Exit `1` on failure — usable in CI.
-- **`scripts/verify.js`** — Extended post-generation verifier. Runs all `validate-contract.js` checks plus optional Playwright visual screenshot (`--playwright <url>`). Imports shared logic from `packages/variant-contract/validate.js`. Detects paired mode and reports `a11yRequired` status.
+- **`scripts/verify.js`** — Extended post-generation verifier. Runs all `validate-contract.js` checks plus optional Playwright visual screenshot (`--playwright <url>`). Imports shared logic from `packages/variant-contract/validate.js`. Detects paired mode and reports `a11yRequired` status. **Single-arg mode**: when called with only the output file path (e.g. from a PostToolUse hook), silently skips non-TSX files and files without `// FORGE NOTES`, then resolves the contract from a `// @contract <path>` directive in the first 30 lines.
+- **`scripts/fetch-handoff.js`** — Fetches a Claude Design handoff URL (Node 18 `fetch`, no deps) and materializes refs into `design/.handoff-cache/<hash>/`. Handles JSON manifest (branch A), raw HTML (branch B), and zip (branch C — unsupported, exits with instructions). Invoked by `invoke.js --handoff`; can also run standalone.
+- **`scripts/export-design.js`** — Reads `design/design-arch.json` and writes `design/claude-design-bundle/` — a folder uploadable to Claude Design containing `README.md`, `tokens.json`, `components.md`, `conventions.md`, `globals.css`, and `standards/*.md`.
 
 ### Signal-based generation
 
 `detectSignals()` in `invoke.js` classifies refs and determines:
 - **Primary signal**: `CONVERT_SECTION` (default), `CONVERT_PAGE` (>400 lines or task mentions "page"), or `CONVERT_VARIANT` (single interface file, no HTML/image layout refs)
-- **Modifiers**: `+CONFIG` (JSON/data ref present), `+IMAGE` (image ref present), `+BRAND` (ref filename matches `/brand|voice|tone/i`, or `arch.designStandards.brand` set), `+A11Y` (via `--a11y`, `arch.a11yRequired`, or `.stackshift/installed.json` `a11yRequired: true`), `+CREATIVE` (via `--creative`; **refused** under `CONVERT_VARIANT`, `CONVERT_PAGE`, and paired mode), `+DIFF` (via `--diff <path>`; **`CONVERT_SECTION` only** — refused under `CONVERT_VARIANT`, `CONVERT_PAGE`, and `+CREATIVE`)
+- **Modifiers**: `+CONFIG` (JSON/data ref present), `+IMAGE` (image ref present), `+BRAND` (ref filename matches `/brand|voice|tone/i`, or `arch.designStandards.brand` set), `+A11Y` (via `--a11y`, `arch.a11yRequired`, or `.stackshift/installed.json` `a11yRequired: true`), `+CREATIVE` (via `--creative`; **refused** under `CONVERT_VARIANT`, `CONVERT_PAGE`, and paired mode), `+DIFF` (via `--diff <path>`; **`CONVERT_SECTION` only** — refused under `CONVERT_VARIANT`, `CONVERT_PAGE`, and `+CREATIVE`), `+CLAUDE_DESIGN` (via `--handoff <url>` or any ref path under `design/.handoff-cache/`; handoff wins for layout, design-arch wins for tokens)
 - **Override**: `--signal` flag forces the primary signal, bypassing auto-detection
 - **Paired mode**: `.stackshift/installed.json` presence is detected; surfaced as `PAIRED: stackshift x.y.z` in `CONVERT_VARIANT` output; honors `a11yRequired`; blocks `+CREATIVE`
 
@@ -133,7 +159,9 @@ The `CONVERT_SECTION` and `SIGNAL_VARIANT` base blocks include an **anti-slop ae
 
 `SIGNAL_DIFF` (0.1.6+) is injected only when `--diff <path>` is passed. `invoke.js` loads the existing file as `diffSource`, emits an `EXISTING COMPONENT [path]` block in the section context, and defaults `--output` to the diff path. The addendum instructs the AI to preserve unchanged regions and rewrite FORGE NOTES from scratch with a `DIFF` sub-block.
 
-`SIGNAL_VARIANT` requires FORGE NOTES to include a `// CONTRACT` sub-block documenting contract path, interface name, version, every prop consumed, fallback rule verified, and exports invariant confirmation.
+`SIGNAL_VARIANT` requires FORGE NOTES to include a `// CONTRACT` sub-block documenting contract path, interface name, version, every prop consumed, fallback rule verified, and exports invariant confirmation. It also requires a `// @contract <path>` directive on line 3 of FORGE NOTES — this machine-readable tag is what `verify.js` single-arg mode uses to auto-detect the contract in PostToolUse hooks.
+
+`SIGNAL_CLAUDE_DESIGN` is injected when `+CLAUDE_DESIGN` is active. The addendum enforces that layout comes from the handoff but all tokens are remapped to `design-arch.json`. Requires a `// CLAUDE_DESIGN` sub-block in FORGE NOTES documenting source URL, task summary, and token remappings.
 
 To add a new signal: add a `## SIGNAL_NAME` block in `prompt-patterns.md` with a fenced `**System Addendum:**` block, then add detection logic in `detectSignals()`.
 
@@ -219,10 +247,18 @@ Components generated by the AI must begin with a `// FORGE NOTES` comment block 
 | `scripts/invoke.js` | Context-preparation script — outputs structured context to stdout |
 | `scripts/scan.js` | Project scanner → `design-arch.json` (v3/v4; use `--schema-v4` for dark tokens) |
 | `scripts/validate-contract.js` | Post-generation contract validator for `CONVERT_VARIANT` outputs |
-| `scripts/verify.js` | Extended verifier — static contract checks + optional Playwright screenshot |
+| `scripts/verify.js` | Extended verifier — static contract checks + optional Playwright screenshot; single-arg mode for PostToolUse hooks |
+| `scripts/fetch-handoff.js` | Fetches a Claude Design handoff URL and materializes refs into `design/.handoff-cache/` |
+| `scripts/export-design.js` | Exports `design-arch.json` as a Claude Design–ingestible bundle to `design/claude-design-bundle/` |
+| `scripts/detect.sh` | Cross-agent skill-root resolver — used by Codex CLI bash invocations |
 | `scripts/sync-version.mjs` | Syncs `skill.version` → `package.json`, `README.md`, `SKILL.md` |
-| `references/prompt-patterns.md` | Composable signal instruction blocks (+ anti-slop, CONTRACT, a11y) |
-| `references/advanced-usage.md` | Custom signals, troubleshooting |
+| `commands/forge-scan.md` | `/forge-scan` slash command (Claude Code) |
+| `commands/forge.md` | `/forge` slash command (Claude Code) |
+| `commands/forge-verify.md` | `/forge-verify` slash command (Claude Code) |
+| `commands/forge-export-design.md` | `/forge-export-design` slash command (Claude Code) |
+| `references/prompt-patterns.md` | Composable signal instruction blocks (CONVERT_SECTION, SIGNAL_VARIANT, SIGNAL_CLAUDE_DESIGN, + modifiers) |
+| `references/advanced-usage.md` | Custom signals, PostToolUse auto-verify hook, troubleshooting |
+| `references/claude-design-handoff-format.md` | API shape discovery notes for Claude Design handoff URLs |
 | `references/versions.md` | Version compatibility matrix (Node, Next.js, StackShift, libraries) |
 | `references/standards/` | Built-in fallback design standards (empty templates: typography, spacing, color, a11y) |
 | `references/standards/README.md` | How the three-layer standards resolution works and how to override |
@@ -233,11 +269,13 @@ Components generated by the AI must begin with a `// FORGE NOTES` comment block 
 | `skill.version` | Canonical version (edit this, then run `sync-version.mjs`) |
 | `change-logs/` | Per-release markdown notes in kebab-case (`x-x-x-description.md`) |
 | `design/design-arch.json` | Generated design authority (not committed upstream) |
-| `design/forge-page-plan.json` | Generated page plan — review and edit between Stage 1 and Stage 2 |
+| `design/forge-page-plan.json` | Generated page plan — review and edit between Stage 1 and Stage 2; validated by `validatePagePlan()` before Stage 2 |
+| `design/.handoff-cache/` | Runtime cache for fetched Claude Design handoffs (keyed by URL hash; excluded from scan) |
+| `design/claude-design-bundle/` | Export output from `export-design.js` — uploadable to Claude Design |
 | `.stackshift/installed.json` | Paired-mode marker (external, written by StackShift) — triggers paired-mode detection |
 
 ## Environment
 
 - Node.js ≥ 18 required (uses ESM)
 - No API key required for any operation
-- No external dependencies — uses Node.js stdlib only (`fs`, `path`, `child_process`)
+- No external dependencies — uses Node.js stdlib only (`fs`, `path`, `child_process`, `crypto`, `url`)
