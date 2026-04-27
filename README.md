@@ -4,9 +4,9 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org)
 [![Skills Compatible](https://img.shields.io/badge/skills-compatible-blue)](https://github.com/vercel/skills-cli)
 
-> **Version** 0.1.8
+> **Version** 0.1.9
 
-Next.js component generator for Claude Code and AI coding assistants. Converts HTML, TSX, images, and JSON reference materials into production-ready components that match your project's existing design system — using your actual component libraries, Tailwind tokens, and coding conventions.
+Next.js component generator for Codex CLI, Claude Code, and other AI coding assistants. Converts HTML, TSX, images, and JSON reference materials into production-ready components that match your project's existing design system — using your actual component libraries, Tailwind tokens, and coding conventions.
 
 ## What is UI Forge?
 
@@ -20,31 +20,49 @@ UI Forge is a Agentic Code skill that understands your project before generating
 ## Installation
 
 ```bash
-npx skills add extragraj/ui-forge -y -g
+# Codex CLI
+npx skills add extragraj/ui-forge -y -g -a codex
+
+# Claude Code
+npx skills add extragraj/ui-forge -y -g -a claude-code
+
+# Install for both
+npx skills add extragraj/ui-forge -y -g -a codex -a claude-code
 ```
 
 | Flag | Description |
 |------|-------------|
 | `-y` | Auto-confirm all prompts |
 | `-g` | Install globally — available across all projects |
+| `-a <agent>` | Install for a specific agent runtime |
 
 
 ## Quick Start
 
-### 1. Scan your project
+### 1. Resolve the installed skill root
+
+Run once per session in the target project:
+
+```bash
+SKILL_ROOT="$(sh ~/.agents/skills/ui-forge/scripts/detect.sh 2>/dev/null || sh ~/.claude/skills/ui-forge/scripts/detect.sh)"
+
+ls "$SKILL_ROOT/scripts/scan.js" && echo "SKILL_ROOT OK"
+```
+
+### 2. Scan your project
 
 Run once to create `design/design-arch.json` — the design authority file that drives all generation.
 
 ```bash
-node scripts/scan.js
+node "$SKILL_ROOT/scripts/scan.js"
 ```
 
 This captures your component directories, used libraries, Tailwind tokens, global CSS, and any design standard documents. Re-run when you add new libraries, update your Tailwind theme, or change component standards.
 
-### 2. Generate a component
+### 3. Generate a component
 
 ```bash
-node scripts/invoke.js \
+node "$SKILL_ROOT/scripts/invoke.js" \
   --task "Convert hero section with CTA buttons" \
   --refs ./hero.html \
   --output ./components/Hero.tsx
@@ -74,14 +92,14 @@ export default function Hero() {
 }
 ```
 
-### 3. Full page conversion (two-stage)
+### 4. Full page conversion (two-stage)
 
 For pages with multiple sections (>400 lines or when the task mentions "page"), UI Forge uses a two-stage pipeline.
 
 **Stage 1 — Decompose the page:**
 
 ```bash
-node scripts/invoke.js \
+node "$SKILL_ROOT/scripts/invoke.js" \
   --task "Convert landing page" \
   --refs ./landing.html
 ```
@@ -100,7 +118,7 @@ Writes `design/forge-page-plan.json` and exits. Review the plan — set `existin
 **Stage 2 — Generate sections:**
 
 ```bash
-node scripts/invoke.js \
+node "$SKILL_ROOT/scripts/invoke.js" \
   --task "Convert landing page" \
   --refs ./landing.html
 ```
@@ -172,7 +190,7 @@ Standards inject automatically into the generation system prompt — no template
 Pass any combination of file types together:
 
 ```bash
-node scripts/invoke.js \
+node "$SKILL_ROOT/scripts/invoke.js" \
   --task "Build pricing table" \
   --refs ./pricing.html,./tiers.json,./mockup.png
 ```
@@ -249,7 +267,7 @@ When StackShift scaffolds a variant file and hands off to UI Forge, the skill
 runs in contract-compliance mode:
 
 ```bash
-node scripts/invoke.js \
+node "$SKILL_ROOT/scripts/invoke.js" \
   --task "Build pricing variant" \
   --signal CONVERT_VARIANT \
   --refs ./components/Pricing/types.ts \
@@ -331,7 +349,7 @@ the FORGE NOTES `A11Y` sub-block as judgment calls.
 |------|-------------|
 | `--project-root <path>` | Scan a different directory (defaults to cwd) |
 | `--patch` | Re-scan everything, preserve existing `designStandards` entries |
-| `--quick` | Skip the `claude` CLI synthesis branch (static analysis only) |
+| `--quick` | Skip the optional `claude` CLI synthesis branch (static analysis only) |
 | `--ignore <file>` | Load an additional ignore file (repeatable) |
 | `--no-default-ignore` | Skip the built-in base ignore list |
 | `--theme <name>` | Seed `design-arch.json` from `themes/<name>.json` (gap-fill only). Available: `shadcn`, `mantine`, `plain-tailwind`. |
@@ -342,6 +360,7 @@ Full release notes are in [`change-logs/`](./change-logs/).
 
 | Version | Date | Notes |
 |---------|------|-------|
+| [0.1.9](./change-logs/0-1-9-cross-agent-skill-root-compatibility.md) | 2026-04-27 | Cross-agent compatibility fix: new `scripts/detect.sh` resolves the installed skill root across Codex CLI and Claude Code, and `SKILL.md` now uses `SKILL_ROOT`-based commands with an explicit path-resolution step |
 | [0.1.8](./change-logs/0-1-8-token-optimization.md) | 2026-04-21 | Token optimization: SKILL.md body compressed (~1,800 tokens/activation saved), `prompt-patterns.md` addenda condensed (`CONVERT_SECTION` +`SIGNAL_A11Y` +`SIGNAL_BRAND`), `archToContext()` caps tightened, `extractBlock()` memoized, `references/INDEX.md` added for targeted on-demand reads |
 | [0.1.7](./change-logs/0-1-7-examples-preview-verify-darkmode-contract.md) | 2026-04-21 | Golden conversion examples (`examples/`), `--preview` (HTML context snapshot; standalone only), `--verify` + `scripts/verify.js` (static contract checks + Playwright), `--validate-input` pre-flight, `scan.js --schema-v4` dark-mode token extraction, `packages/variant-contract/` shared validator module |
 | [0.1.6](./change-logs/0-1-6-diff-and-themes.md) | 2026-04-21 | `+DIFF` modifier for surgical iteration on an existing file (`--diff <path>`; `CONVERT_SECTION` only), `scan.js --theme <name>` starters for fresh projects (`shadcn`, `mantine`, `plain-tailwind`; gap-fill only, scan data wins) |
@@ -354,6 +373,6 @@ Full release notes are in [`change-logs/`](./change-logs/).
 
 ---
 
-**Built for:** Claude Code · Cursor · Cline · GitHub Copilot · Any AI coding assistant supporting the Vercel Skills format
+**Built for:** Codex CLI · Claude Code · Cursor · Cline · GitHub Copilot · Any AI coding assistant supporting the Vercel Skills format
 
 **Token-optimal. Production-ready. Design-authority-driven.**
