@@ -1,0 +1,23 @@
+{
+  "_theme": "plain-tailwind",
+  "_description": "Plain Tailwind CSS with no component library. HTML elements styled with Tailwind utility classes. No CVA, no shadcn/ui, no Radix primitives.",
+  "componentLib": ["./components"],
+  "usedComponents": [],
+  "usedLibraries": [
+    { "name": "clsx", "version": "^2.0.0", "uses": 1 }
+  ],
+  "tailwind": {
+    "colorTokens": "slate, gray, zinc, neutral, stone, red, orange, amber, yellow, lime, green, emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia, pink, rose"
+  },
+  "patterns": {
+    "spacing": "Container: max-w-7xl mx-auto px-4 sm:px-6 lg:px-8. Sections: py-12 sm:py-16 lg:py-24. Stack spacing via space-y-4 / space-y-6 or flex gap-4 / gap-6.",
+    "typography": "Tailwind type scale. Headings: text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight. Body: text-base text-gray-600. Lead text: text-lg text-gray-500. Apply responsive prefixes throughout.",
+    "conventions": [
+      "No component library — compose from HTML elements + Tailwind utilities",
+      "Use clsx() for conditional className composition",
+      "Mobile-first responsive: base styles, then sm: md: lg: xl: overrides",
+      "Interactive states: hover: focus: active: disabled: variants",
+      "Dark mode via dark: variant when enabled in tailwind.config"
+    ]
+  }
+}

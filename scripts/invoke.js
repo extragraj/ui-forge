@@ -145,7 +145,7 @@ function loadDesignArch() {
     arch._v = 3
   }
 
-  // Auto-migrate v3 → v4 (additive: darkColorTokens reserved, defaults to undefined)
+  // Auto-migrate v3 → v4
   if (arch._v === 3) arch._v = 4
 
   const age = arch._scanned
@@ -155,6 +155,9 @@ function loadDesignArch() {
     process.stderr.write(`Warning: design-arch.json is ${Math.floor(age)} days old. Re-run scan.js if patterns have changed.\n`)
   return arch
 }
+
+// Meta documents to ignore in standards injection
+const META_STANDARDS = ['README', 'sample-standard']
 
 // Resolution order (last wins per key):
 //   1. arch.designStandards  — explicit file or directory paths
@@ -182,6 +185,7 @@ function loadDesignStandards(arch, opts = {}) {
       for (const file of files) {
         const slotKey = file.replace(/\.md$/, '')
         if (skipExisting && standards[slotKey]) continue
+        if (source === 'built-in' && META_STANDARDS.includes(slotKey)) continue
         const content = readFileSync(join(fullPath, file), 'utf-8')
         if (source === 'built-in' && !isSubstantive(content)) continue
         standards[slotKey] = content
@@ -190,6 +194,7 @@ function loadDesignStandards(arch, opts = {}) {
     } else {
       const slotKey = basename(fullPath, '.md')
       if (skipExisting && standards[slotKey]) return
+      if (source === 'built-in' && META_STANDARDS.includes(slotKey)) return
       const content = readFileSync(fullPath, 'utf-8')
       if (source === 'built-in' && !isSubstantive(content)) return
       standards[slotKey] = content
@@ -239,11 +244,16 @@ function loadDesignStandards(arch, opts = {}) {
     for (const entry of readdirSync(BUILTIN_STANDARDS_DIR).sort()) {
       const entryPath = join(BUILTIN_STANDARDS_DIR, entry)
       const st = statSync(entryPath)
+      
+      // Auto-filter stackshift-ui if arch is NOT stackshift
+      if (entry === 'stackshift-ui' && !arch.isStackShift) continue
+
       if (st.isDirectory()) {
         loadPath(entryPath, 'built-in', true)
       } else if (entry.endsWith('.md')) {
         const slotKey = entry.replace(/\.md$/, '')
         if (standards[slotKey]) continue
+        if (META_STANDARDS.includes(slotKey)) continue
         const content = readFileSync(entryPath, 'utf-8')
         if (!isSubstantive(content)) continue
         standards[slotKey] = content
@@ -271,33 +281,41 @@ function isSubstantive(md) {
 
 let _archContextCache = null
 let _archContextKey = null
-function archToContext(arch) {
-  // Cache keyed by _scanned timestamp so repeated builders reuse the same
-  // serialised context within a single process.
-  const key = arch._scanned ?? ''
+function archToContext(arch, isLite = false) {
+  // Cache keyed by _scanned timestamp
+  const key = (arch._scanned ?? '') + (isLite ? ':lite' : '')
   if (_archContextKey === key && _archContextCache !== null) return _archContextCache
   const lines = []
-  if (arch.componentLib?.length)
-    lines.push(`componentLib: ${arch.componentLib.join(', ')}`)
-  if (arch.usedComponents?.length)
-    lines.push(`usedComponents: ${arch.usedComponents.slice(0, 25).join(', ')}`)
-  if (arch.usedLibraries?.length)
-    lines.push(`usedLibraries: ${arch.usedLibraries.map(l => l.name).join(', ')}`)
-  if (arch.tailwind?.colorTokens)
-    lines.push(`colorTokens: ${arch.tailwind.colorTokens}`)
-  if (arch.tailwind?.darkColorTokens)
-    lines.push(`darkColorTokens: ${arch.tailwind.darkColorTokens}`)
-  if (arch.tailwind?.themeSection)
-    lines.push(`tailwind.theme:\n${arch.tailwind.themeSection.slice(0, 500)}`)
-  if (arch.globalCss) {
-    const css = arch.globalCss.trim()
-    if (!css.split('\n').every(l => /^\s*(@tailwind|\/\*|\*\/?|$)/.test(l)))
-      lines.push(`globalCss:\n${css.slice(0, 300)}`)
+  
+  if (isLite) {
+    if (arch.componentLib?.length) lines.push(`lib: ${arch.componentLib.join(',')}`)
+    if (arch.usedLibraries?.length) lines.push(`deps: ${arch.usedLibraries.map(l => l.name).join(',')}`)
+    if (arch.tailwind?.colorTokens) lines.push(`tokens: ${arch.tailwind.colorTokens.split(',').map(s => s.trim()).slice(0,10).join(',')}...`)
+    if (arch.patterns?.spacing) lines.push(`spacing: ${arch.patterns.spacing}`)
+    if (arch.patterns?.typography) lines.push(`typography: ${arch.patterns.typography}`)
+  } else {
+    if (arch.componentLib?.length)
+      lines.push(`componentLib: ${arch.componentLib.join(', ')}`)
+    if (arch.usedComponents?.length)
+      lines.push(`usedComponents: ${arch.usedComponents.slice(0, 25).join(', ')}`)
+    if (arch.usedLibraries?.length)
+      lines.push(`usedLibraries: ${arch.usedLibraries.map(l => l.name).join(', ')}`)
+    if (arch.tailwind?.colorTokens)
+      lines.push(`colorTokens: ${arch.tailwind.colorTokens}`)
+    if (arch.tailwind?.darkColorTokens)
+      lines.push(`darkColorTokens: ${arch.tailwind.darkColorTokens}`)
+    if (arch.tailwind?.themeSection)
+      lines.push(`tailwind.theme:\n${arch.tailwind.themeSection.slice(0, 500)}`)
+    if (arch.globalCss) {
+      const css = arch.globalCss.trim()
+      if (!css.split('\n').every(l => /^\s*(@tailwind|\/\*|\*\/?|$)/.test(l)))
+        lines.push(`globalCss:\n${css.slice(0, 300)}`)
+    }
+    if (arch.patterns?.spacing)    lines.push(`spacing: ${arch.patterns.spacing}`)
+    if (arch.patterns?.typography) lines.push(`typography: ${arch.patterns.typography}`)
+    if (arch.patterns?.conventions?.length)
+      lines.push(`conventions:\n${arch.patterns.conventions.map(c => '- ' + c).join('\n')}`)
   }
-  if (arch.patterns?.spacing)    lines.push(`spacing: ${arch.patterns.spacing}`)
-  if (arch.patterns?.typography) lines.push(`typography: ${arch.patterns.typography}`)
-  if (arch.patterns?.conventions?.length)
-    lines.push(`conventions:\n${arch.patterns.conventions.map(c => '- ' + c).join('\n')}`)
   _archContextCache = lines.join('\n')
   _archContextKey = key
   return _archContextCache
@@ -597,7 +615,10 @@ function extractBlock(src, name) {
   return result
 }
 
-function loadComposedAddendum(signals) {
+function loadComposedAddendum(signals, isLite = false) {
+  if (isLite) {
+    return `Instruction Reference: Follow patterns in references/prompt-patterns.md for [${signals.primary}${signals.modifiers.length ? ', ' + signals.modifiers.join(', ') : ''}]`
+  }
   const src = getPatternSrc()
   const baseName = signals.primary === 'CONVERT_VARIANT' ? 'SIGNAL_VARIANT' : 'CONVERT_SECTION'
   const base = extractBlock(src, baseName) ?? { addendum: '' }
@@ -609,13 +630,17 @@ function loadComposedAddendum(signals) {
 
 // ─── Context output builders ──────────────────────────────────────────────────
 
-function appendStandards(lines, standardsResult) {
+function appendStandards(lines, standardsResult, isLite = false) {
   if (!standardsResult) return
   const { standards, sources } = standardsResult
   for (const [key, content] of Object.entries(standards)) {
+    const source = sources?.[key] ?? 'arch'
+    if (isLite) {
+      lines.push(`// [REF] STANDARD: ${key} (Source: ${source})`)
+      continue
+    }
     if (content.length > 3000)
       process.stderr.write(`ui-forge: Warning — design standard "${key}" truncated to 3000 chars (${content.length} total). Consider splitting into focused sections.\n`)
-    const source = sources?.[key] ?? 'arch'
     lines.push('')
     lines.push(`// --- STANDARD: ${key} ---`)
     lines.push(`# source: ${source}`)
@@ -644,7 +669,7 @@ function buildSectionContext({ task, archCtx, signals, standards, addendum, outp
   lines.push('')
   lines.push('DESIGN AUTHORITY')
   lines.push(archCtx)
-  appendStandards(lines, standards)
+  appendStandards(lines, standards, signals.isLite)
 
   if (mainRef) {
     lines.push('')
@@ -730,9 +755,9 @@ function buildVariantContext({ task, archCtx, signals, standards, addendum, outp
   lines.push('TASK')
   lines.push(task)
   lines.push('')
-
-  // Standards at highest priority (Task 3)
-  appendStandards(lines, standards)
+  
+  // Standards at highest priority
+  appendStandards(lines, standards, signals.isLite)
 
   // Props interface — the contract
   if (interfaceRef) {
@@ -832,11 +857,13 @@ function buildPageStage1Context({ task, mainRef, archCtx }) {
   lines.push('  1. Review design/forge-page-plan.json')
   lines.push('  2. Set existingProjectSection: true on sections they already have')
   lines.push('  3. Re-run the same command to generate the sections (Stage 2 runs automatically)')
+  
+  if (archCtx.length > 500) lines.push('\n// [NOTE] archCtx condensed for Stage 1')
 
   return lines.join('\n')
 }
 
-function buildPageStage2Context({ archCtx, signals, standards, addendum, plan, mainRef, outputDir }) {
+function buildPageStage2Context({ archCtx, signals, standards, addendum, plan, mainRef, outputDir, isLite }) {
   const todo = plan.sections.filter(s => !s.existingProjectSection)
   const skipped = plan.sections.length - todo.length
 
@@ -846,7 +873,7 @@ function buildPageStage2Context({ archCtx, signals, standards, addendum, plan, m
   lines.push('')
   lines.push('DESIGN AUTHORITY')
   lines.push(archCtx)
-  appendStandards(lines, standards)
+  appendStandards(lines, standards, isLite)
   lines.push('')
   lines.push('GENERATION INSTRUCTIONS')
   lines.push(addendum)
@@ -892,12 +919,17 @@ function main() {
     }
   }
 
-  let params = { ...flags }
+  let params = {}
   if (flags.config) {
-    Object.assign(params,
-      JSON.parse(readFileSync(resolve(PROJECT_ROOT, flags.config), 'utf-8')))
-    delete params.config
+    try {
+      params = JSON.parse(readFileSync(resolve(PROJECT_ROOT, flags.config), 'utf-8'))
+    } catch (e) {
+      process.stderr.write(`Error parsing config file ${flags.config}: ${e.message}\n`)
+      process.exit(1)
+    }
+    delete flags.config
   }
+  params = { ...params, ...flags }
 
   // --handoff: fetch a Claude Design handoff URL and populate refs before task resolution
   if (params.handoff) {
@@ -954,6 +986,7 @@ ui-forge — Next.js component generator for Claude Code
   --config   Load all params from JSON file
   --rescan   Re-run scan.js before generating
   --replan   Force Stage 1 page plan regeneration
+  --lite     Optimize for token efficiency (skip verbose standards/instructions)
 
 First run: node .claude/skills/ui-forge/scripts/scan.js
 `)
@@ -963,13 +996,14 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
   if (typeof params.refs === 'string')
     params.refs = params.refs.split(',').map(s => s.trim())
 
-  for (const flag of ['rescan', 'replan', 'a11y', 'creative', 'no-default-standards', 'preview', 'verify', 'validate-input'])
+  for (const flag of ['rescan', 'replan', 'a11y', 'creative', 'no-default-standards', 'preview', 'verify', 'validate-input', 'lite'])
     if (params[flag] === 'true') params[flag] = true
   // Normalise kebab-case flags → camelCase for internal use
   if (params['no-default-standards']) params.noDefaultStandards = true
   const preview = params.preview === true
   const verifyMode = params.verify === true
   const validateInput = params['validate-input'] === true
+  const isLite = params.lite === true
 
   if (params.rescan) {
     process.stderr.write('ui-forge: re-scanning project...\n')
@@ -1006,10 +1040,16 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
     throw new Error('--diff requires a path to an existing file (e.g. --diff ./components/Hero.tsx).')
   }
 
+  const standards = loadDesignStandards(arch, { useBuiltins: !params.noDefaultStandards })
   const signals = detectSignals(params.task, classifiedRefs, params.signal, {
-    a11y: a11yRequired, creative, brandStandard, diff: Boolean(diffSource),
-    handoff: Boolean(params.handoff),
+    a11y: a11yRequired, creative, diff: !!params.diff, handoff: !!params.handoff,
+    brandStandard, isLite
   })
+  
+  // Attach isLite to signals for easy passing
+  signals.isLite = isLite
+  
+  const archCtx = archToContext(arch, isLite)
 
   // --validate-input: pre-flight check on incoming contract file (CONVERT_VARIANT only)
   if (validateInput) {
@@ -1030,9 +1070,6 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
     }
     process.stderr.write(`ui-forge: input validation passed — interface: ${ifaceNameCheck} (${contractRef.path})\n`)
   }
-
-  const standards = loadDesignStandards(arch, { useBuiltins: !params.noDefaultStandards })
-  const archCtx = archToContext(arch)
 
   if (paired)
     process.stderr.write(`ui-forge: paired-mode detected (stackshift ${paired.version})\n`)
@@ -1069,8 +1106,8 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
     }
   }
 
-  // Resolve mode: body-only is the default under CONVERT_VARIANT
-  let mode = params.mode ?? (signals.primary === 'CONVERT_VARIANT' ? 'body-only' : 'full')
+  // Resolve mode: default to 'full' for all signals
+  let mode = params.mode ?? 'full'
   if (mode !== 'full' && mode !== 'body-only')
     throw new Error(`Unknown mode: ${mode}. Valid: full, body-only`)
 
@@ -1085,7 +1122,7 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
 
   // ── CONVERT_VARIANT ─────────────────────────────────────────────────────────
   if (signals.primary === 'CONVERT_VARIANT') {
-    const addendum = loadComposedAddendum(signals)
+    const addendum = loadComposedAddendum(signals, isLite)
     process.stderr.write(`ui-forge: CONVERT_VARIANT${signals.modifiers.length ? ' +' + signals.modifiers.join(' +') : ''} [mode: ${mode}]\n`)
 
     const variantCtx = buildVariantContext({
@@ -1104,7 +1141,7 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
     if (preview) {
       const previewPath = join(PROJECT_ROOT, 'forge-preview.html')
       writeFileSync(previewPath, generatePreviewHtml({ task: params.task, signals, archCtx, refs: classifiedRefs, paired, standards }), 'utf-8')
-      process.stderr.write(`ui-forge: preview written → ${previewPath}\n`)
+      process.stdout.write(`ui-forge: preview written → ${previewPath}\n`)
     }
     return
   }
@@ -1152,30 +1189,30 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
       const skipped = plan.sections.length - todo.length
       process.stderr.write(`ui-forge: Stage 2 — ${todo.length} section(s) to generate${skipped ? `, ${skipped} skipped` : ''}.\n`)
 
-      const addendum = loadComposedAddendum({ ...signals, primary: 'CONVERT_SECTION' })
+      const addendum = loadComposedAddendum({ ...signals, primary: 'CONVERT_SECTION' }, isLite)
       const outputDir = params.output ? dirname(resolve(PROJECT_ROOT, params.output)) : null
 
       process.stdout.write(buildPageStage2Context({
-        archCtx, signals, standards, addendum, plan, mainRef, outputDir,
+        archCtx, signals, standards, addendum, plan, mainRef, outputDir, isLite
       }) + '\n')
 
       if (preview) {
         const previewPath = join(PROJECT_ROOT, 'forge-preview.html')
         writeFileSync(previewPath, generatePreviewHtml({ task: params.task, signals, archCtx, refs: classifiedRefs, paired, standards }), 'utf-8')
-        process.stderr.write(`ui-forge: preview written → ${previewPath}\n`)
+        process.stdout.write(`ui-forge: preview written → ${previewPath}\n`)
       }
       return
     }
 
     // Stage 1 — no plan yet
     process.stderr.write('ui-forge: Stage 1 — outputting page decomposition context...\n')
-    process.stdout.write(buildPageStage1Context({ task: params.task, mainRef, archCtx }) + '\n')
+    process.stdout.write(buildPageStage1Context({ task: params.task, mainRef, archCtx: archToContext(arch, true) }) + '\n')
     return
   }
 
   // ── CONVERT_SECTION ─────────────────────────────────────────────────────────
-  const addendum = loadComposedAddendum(signals)
-  process.stderr.write(`ui-forge: CONVERT_SECTION${signals.modifiers.length ? ' +' + signals.modifiers.join(' +') : ''}\n`)
+  const addendum = loadComposedAddendum(signals, isLite)
+  process.stderr.write(`ui-forge: CONVERT_SECTION${signals.modifiers.length ? ' +' + signals.modifiers.join(' +') : ''}${isLite ? ' [LITE]' : ''}\n`)
 
   process.stdout.write(buildSectionContext({
     task: params.task,
@@ -1191,7 +1228,7 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
   if (preview) {
     const previewPath = join(PROJECT_ROOT, 'forge-preview.html')
     writeFileSync(previewPath, generatePreviewHtml({ task: params.task, signals, archCtx, refs: classifiedRefs, paired, standards }), 'utf-8')
-    process.stderr.write(`ui-forge: preview written → ${previewPath}\n`)
+    process.stdout.write(`ui-forge: preview written → ${previewPath}\n`)
   }
 }
 

@@ -37,6 +37,12 @@ generate the component from that context.
 
 ### Claude Code (slash commands)
 
+Install via the Skills CLI, then run once to wire slash commands and Bash permissions:
+
+```bash
+node .claude/skills/ui-forge/scripts/cli.js install
+```
+
 ```
 /forge-scan
 ```
@@ -115,36 +121,42 @@ Writes `design/claude-design-bundle/` — a folder with `README.md`, `tokens.jso
 | `--rescan` | Re-run scan.js before generating                   |
 | `--replan` | Force Stage 1 page plan regeneration               |
 
-### Advanced / Codex CLI / Non-Claude Code
+### Other CLIs / Bash (Codex, terminal, CI)
 
-Resolve the skill root once per session before running any commands:
+Use `cli.js` as the entry point — it proxies all commands through to the right script with full argument pass-through:
 
 ```bash
-SKILL_ROOT="$(sh ./scripts/detect.sh)"
+# Scan
+node .claude/skills/ui-forge/scripts/cli.js scan
+node .claude/skills/ui-forge/scripts/cli.js scan --quick
+node .claude/skills/ui-forge/scripts/cli.js scan --theme shadcn
+
+# Generate (output goes to stdout; pipe or read it, then generate)
+node .claude/skills/ui-forge/scripts/cli.js forge --task "Convert hero" --refs ./hero.html --output ./Hero.tsx
+
+# Verify
+node .claude/skills/ui-forge/scripts/cli.js verify ./Hero.tsx ./types.ts
+
+# Export design bundle
+node .claude/skills/ui-forge/scripts/cli.js export
+
+# Help
+node .claude/skills/ui-forge/scripts/cli.js help
 ```
 
-Verify it resolved correctly:
+If the package is installed globally via npm/npx, the `ui-forge` bin is available:
 
 ```bash
-ls "$SKILL_ROOT/scripts/scan.js" && echo "SKILL_ROOT OK" || echo "FAILED — re-run detection"
+npx extragraj/ui-forge install
+npx extragraj/ui-forge scan --quick
+npx extragraj/ui-forge forge --task "..." --refs ./ref.html --output ./Hero.tsx
 ```
 
-If detection fails, set the path explicitly:
+For environments where the skill root isn't `.claude/skills/ui-forge`, resolve it first:
 
 ```bash
-# Codex CLI global install
-SKILL_ROOT="$HOME/.agents/skills/ui-forge"
-
-# Claude Code global install
-SKILL_ROOT="$HOME/.claude/skills/ui-forge"
-```
-
-Then run scripts directly:
-
-```bash
-node "$SKILL_ROOT/scripts/scan.js"
-node "$SKILL_ROOT/scripts/invoke.js" --task "Convert hero section" --refs ./hero.html --output ./components/Hero.tsx
-node "$SKILL_ROOT/scripts/verify.js" ./components/Variant.tsx ./types.ts
+SKILL_ROOT="$(sh .claude/skills/ui-forge/scripts/detect.sh)"
+node "$SKILL_ROOT/scripts/cli.js" scan --quick
 ```
 
 ## Signals

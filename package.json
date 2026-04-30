@@ -3,6 +3,9 @@
   "version": "0.2.2",
   "description": "Production Next.js component generator for Claude Code and AI coding assistants. Standalone for any Next.js project or companion mode for StackShift-paired Sanity sites.",
   "type": "module",
+  "bin": {
+    "ui-forge": "scripts/cli.js"
+  },
   "scripts": {
     "scan": "node scripts/scan.js",
     "generate": "node scripts/invoke.js",
@@ -36,7 +39,9 @@
     "README.md",
     "LICENSE",
     "scripts/",
+    "commands/",
     "references/",
+    "themes/",
     "change-logs/"
   ]
 }

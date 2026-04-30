@@ -19,14 +19,20 @@ Accepts any combination of input types — HTML templates, reference TSX, design
 ## Installation
 
 ```bash
-# Codex CLI
-npx skills add extragraj/ui-forge -y -g -a codex
+# General Agentic Model
+npx skills add extragraj/ui-forge -y -g
 
 # Claude Code
 npx skills add extragraj/ui-forge -y -g -a claude-code
 
-# Install for both
+# Install for both Claude and General Agents (e.g. Codex CLI)
 npx skills add extragraj/ui-forge -y -g -a codex -a claude-code
+```
+
+Then run once to wire slash commands and Bash permissions into your project:
+
+```bash
+node .claude/skills/ui-forge/scripts/cli.js install
 ```
 
 | Flag | Description |
@@ -39,12 +45,12 @@ npx skills add extragraj/ui-forge -y -g -a codex -a claude-code
 ## How It Works
 
 1. **Install the skill** — the Skills CLI registers UI Forge with your agent (see [Installation](#installation) below).
-2. **Scan once** — run `/forge-scan` (Claude Code) or `node "$SKILL_ROOT/scripts/scan.js"` (Codex CLI / other agents) to create `design/design-arch.json`. Re-run when you add libraries or update your Tailwind theme.
+2. **Scan once** — run `/forge-scan` (CLI Command) or `node "$SKILL_ROOT/scripts/cli.js" scan` (any Terminal that support Node) to create `design/design-arch.json`. Re-run when you add libraries or update your Tailwind theme.
 3. **Ask your AI assistant** — describe what you want to build. The skill activates automatically, `invoke.js` prepares structured generation context, and your AI assistant generates the component in its own session.
 
 `invoke.js` is a context-preparation script — it never calls an AI API. Your coding assistant reads its output and does the generation.
 
-## Slash Commands (Claude Code)
+## Slash Commands (Agentic CLI)
 
 | Command | Description |
 |---------|-------------|
@@ -53,7 +59,29 @@ npx skills add extragraj/ui-forge -y -g -a codex -a claude-code
 | `/forge-verify <component.tsx> <contract.ts>` | Verify a generated component against its contract |
 | `/forge-export-design` | Export design system as a Claude Design–ingestible bundle |
 
-Codex CLI and other agents use the bash form — see the **Advanced / Codex CLI** section in [SKILL.md](./SKILL.md).
+For other CLI/agents that does not support slash commands, use `cli.js` directly — see [Other CLIs / Bash](#other-clis--bash) below or the full reference in [SKILL.md](./SKILL.md).
+
+## Other CLIs / Bash
+
+`cli.js` is the entry point for any non-Claude Code environment. It proxies all commands through to the right script with full argument pass-through.
+
+Resolve `SKILL_ROOT` first (the path depends on where your agent installed the skill):
+
+```bash
+SKILL_ROOT="$(sh scripts/detect.sh)"   # auto-detects install location across agents
+```
+
+Then run any command:
+
+```bash
+node "$SKILL_ROOT/scripts/cli.js" install   # wire slash commands + permissions
+node "$SKILL_ROOT/scripts/cli.js" scan --quick
+node "$SKILL_ROOT/scripts/cli.js" scan --theme shadcn
+node "$SKILL_ROOT/scripts/cli.js" forge --task "Convert hero" --refs ./hero.html --output ./Hero.tsx
+node "$SKILL_ROOT/scripts/cli.js" verify ./Hero.tsx ./types.ts
+node "$SKILL_ROOT/scripts/cli.js" export
+node "$SKILL_ROOT/scripts/cli.js" help
+```
 
 ## Page Conversion (Two-Stage)
 
@@ -84,7 +112,7 @@ The AI writes `design/forge-page-plan.json`. Review the plan — set `existingPr
 
 The plan file exists — UI Forge detects it and generates each `existingProjectSection: false` section sequentially. To discard the plan and restart Stage 1, pass `--replan`.
 
-> Codex CLI / other agents: replace `/forge` with `node "$SKILL_ROOT/scripts/invoke.js"`.
+> Other agents: use `node "$SKILL_ROOT/scripts/cli.js" forge` instead of `/forge`. See [Other CLIs / Bash](#other-clis--bash) for how to resolve `SKILL_ROOT`.
 
 ## Features
 
@@ -184,11 +212,13 @@ See [Built-in Design Standards](./references/standards/README.md) for the full r
 For fresh or greenfield projects, seed `design-arch.json` from a built-in preset instead of waiting for the scanner to find enough to work with:
 
 ```bash
-node "$SKILL_ROOT/scripts/scan.js" --theme shadcn       # Tailwind + shadcn/ui
-node "$SKILL_ROOT/scripts/scan.js" --theme stackshift   # StackShift UI (@stackshift-ui packages)
+node "$SKILL_ROOT/scripts/cli.js" scan --theme shadcn       # Tailwind + shadcn/ui
+node "$SKILL_ROOT/scripts/cli.js" scan --theme mantine       # Mantine UI v7
+node "$SKILL_ROOT/scripts/cli.js" scan --theme plain-tailwind  # No component library
+node "$SKILL_ROOT/scripts/cli.js" scan --theme stackshift    # StackShift UI
 ```
 
-Or with the slash command: `/forge-scan --theme stackshift`
+Or with the slash command: `/forge-scan --theme shadcn`
 
 Themes are **gap-fill only** — scan findings always win. A theme fills `componentLib`, `usedComponents`, `usedLibraries`, `colorTokens`, and `patterns.*` only when the scanner couldn't detect them. The applied theme is recorded as `arch._theme` in `design-arch.json`.
 
@@ -329,7 +359,7 @@ Exit `1` on violations (missing default export, disallowed named exports, requir
 | `--quick` | Skip the optional `claude` CLI synthesis branch (static analysis only) |
 | `--ignore <file>` | Load an additional ignore file (repeatable) |
 | `--no-default-ignore` | Skip the built-in base ignore list |
-| `--theme <name>` | Seed `design-arch.json` from `themes/<name>.json` (gap-fill only). Available: `shadcn`, `stackshift`. |
+| `--theme <name>` | Seed `design-arch.json` from `themes/<name>.json` (gap-fill only). Available: `shadcn`, `mantine`, `plain-tailwind`, `stackshift`. |
 
 ## Changelog
 
@@ -337,6 +367,8 @@ Full release notes are in [`change-logs/`](./change-logs/).
 
 | Version | Date | Notes |
 |---------|------|-------|
+| [0.2.2B](./change-logs/0-2-2B-theme-and-preview-fixes.md) | 2026-04-30 | Added missing `mantine` and `plain-tailwind` theme presets; `--preview` confirmation moved to stdout (was stderr, invisible in Claude Code slash command output) |
+| [0.2.2A](./change-logs/0-2-2A-token-efficiency-and-lite-optimization.md) | 2026-04-30 | Token Optimization: Introduced `--lite` mode (~90% context reduction), context-aware standards filtering, and fixed CLI-vs-Config precedence logic |
 | [0.2.2](./change-logs/0-2-2-skills-cli-compatibility.md) | 2026-04-30 | Skills CLI compatibility — quoted SKILL.md `description` to fix `yaml` v2 strict-YAML parse failure (colon-space in plain scalar caused "No valid skills found" on every install); `detect.sh` updated with correct Codex global path (`~/.codex/skills/`) and `.agentic` fallback |
 | [0.2.1](./change-logs/0-2-1-directory-standards-and-stackshift-ui.md) | 2026-04-30 | Directory support for design standards — `loadDesignStandards()` now scans subdirectories; `references/standards/stackshift-ui/` replaces the compressed single file with 8 focused uncompressed files (import rule, conditionalLink, component props, color tokens, typography, spacing, setup, a11y) |
 | [0.2.0](./change-logs/0-2-0-stackshift-ui-standards-and-theme.md) | 2026-04-30 | `stackshift-ui` built-in StackShift UI standard and `stackshift` theme preset introduced; `sample-standard.md` template added |

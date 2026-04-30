@@ -14,7 +14,7 @@
 
 import { readFileSync, writeFileSync } from 'fs'
 
-const SEMVER = /^\d+\.\d+\.\d+(-[\w.]+)?$/
+const SEMVER = /^\d+\.\d+\.\d+[\w.-]*$/
 
 // ─── Read canonical version ───────────────────────────────────────────────────
 
@@ -38,7 +38,7 @@ console.log(`✓  package.json       → ${skillVersion}`)
 // ─── README.md ───────────────────────────────────────────────────────────────
 // Targets the line:  > **Version** x.x.x
 
-const README_RE = /^> \*\*Version\*\* \d+\.\d+\.\d+(-[\w.]+)?/m
+const README_RE = /^> \*\*Version\*\* \d+\.\d+\.\d+[\w.-]*/m
 
 let readme = readFileSync('./README.md', 'utf8')
 if (!README_RE.test(readme)) {
@@ -51,7 +51,7 @@ if (!README_RE.test(readme)) {
 // ─── SKILL.md ────────────────────────────────────────────────────────────────
 // Targets the frontmatter line:  version: x.x.x
 
-const SKILL_RE = /^(version:\s*)\d+\.\d+\.\d+(-[\w.]+)?/m
+const SKILL_RE = /^(version:\s*)\d+\.\d+\.\d+[\w.-]*/m
 
 let skill = readFileSync('./SKILL.md', 'utf8')
 if (!SKILL_RE.test(skill)) {

@@ -1,0 +1,30 @@
+{
+  "_theme": "mantine",
+  "_description": "Mantine UI v7 component library. First-party hooks, CSS-in-JS via Emotion, no Tailwind dependency — use Mantine style props or CSS modules.",
+  "componentLib": ["./components"],
+  "usedComponents": [
+    "Button", "Card", "TextInput", "Textarea", "Select", "Modal", "Drawer",
+    "Tabs", "Badge", "Avatar", "Accordion", "Checkbox", "Radio", "Switch",
+    "Slider", "Progress", "Loader", "Notification", "Tooltip", "Menu",
+    "Table", "Pagination", "Divider", "Stack", "Group", "Grid", "Container",
+    "Title", "Text", "Anchor", "ActionIcon", "NumberInput", "PasswordInput"
+  ],
+  "usedLibraries": [
+    { "name": "@mantine/core", "version": "^7.0.0", "uses": 1 },
+    { "name": "@mantine/hooks", "version": "^7.0.0", "uses": 1 }
+  ],
+  "tailwind": {
+    "colorTokens": ""
+  },
+  "patterns": {
+    "spacing": "Mantine spacing scale: xs=10px, sm=12px, md=16px, lg=20px, xl=24px. Use style props (p, m, px, py, gap) or CSS modules for layout. Container uses size='xl' by default.",
+    "typography": "Title and Text components. Heading sizes via size prop (h1–h6) or rem values. Color via c prop (dimmed, primary, etc.). Font configured in MantineProvider theme.",
+    "conventions": [
+      "Import from @mantine/core — no shadcn/ui or Radix primitives",
+      "Prefer Mantine style props over utility classes",
+      "Use useMantineTheme() to read theme tokens in JS",
+      "Responsive style props: { base: val, sm: val, md: val }",
+      "Custom styles via CSS modules: import classes from './Component.module.css'"
+    ]
+  }
+}
