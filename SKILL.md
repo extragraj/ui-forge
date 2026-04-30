@@ -133,7 +133,7 @@ If detection fails, set the path explicitly:
 
 ```bash
 # Codex CLI global install
-SKILL_ROOT="$HOME/.codex/skills/ui-forge"
+SKILL_ROOT="$HOME/.agents/skills/ui-forge"
 
 # Claude Code global install
 SKILL_ROOT="$HOME/.claude/skills/ui-forge"

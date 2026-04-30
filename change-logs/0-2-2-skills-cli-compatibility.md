@@ -31,18 +31,18 @@ The Skills CLI installs the `codex` platform globally to `~/.codex/skills/` (via
 Also added `~/.agentic/skills/ui-forge` (project and global) as a defensive fallback for CLI variants that use the `.agentic` directory.
 
 New candidate order:
-1. `$HOME/.codex/skills/ui-forge` — Codex global (was missing)
-2. `$HOME/.agents/skills/ui-forge` — universal/shared global
-3. `$HOME/.agentic/skills/ui-forge` — agentic platform fallback (new)
-4. `$HOME/.claude/skills/ui-forge` — Claude Code global
+1. `$HOME/.agents/skills/ui-forge` — Codex/universal global (`-a codex` uses `.agents/skills`, the universal shared directory)
+2. `$HOME/.agentic/skills/ui-forge` — agentic platform fallback (new)
+3. `$HOME/.claude/skills/ui-forge` — Claude Code global
+4. `$HOME/.codex/skills/ui-forge` — Codex-specific global fallback
 5. `/etc/codex/skills/ui-forge` — system-wide Codex
 6. `./.agents/skills/ui-forge` — project-local universal
 7. `./.agentic/skills/ui-forge` — project-local agentic (new)
 8. `./.claude/skills/ui-forge` — project-local Claude Code
 
-### `SKILL.md` body — Codex CLI manual path corrected
+### `SKILL.md` body — Codex CLI manual path confirmed
 
-The "Advanced / Codex CLI / Non-Claude Code" section documented the manual `SKILL_ROOT` path for Codex CLI as `$HOME/.agents/skills/ui-forge`. Corrected to `$HOME/.codex/skills/ui-forge` to match the actual Skills CLI install target.
+The "Advanced / Codex CLI / Non-Claude Code" section manual `SKILL_ROOT` path for Codex CLI correctly remains `$HOME/.agents/skills/ui-forge`. The `-a codex` target in the Skills CLI uses the universal `.agents/skills/` directory.
 
 ## Breaking changes
 

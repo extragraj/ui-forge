@@ -13,9 +13,8 @@ if [ -n "$CLAUDE_SKILL_DIR" ] && [ -f "$CLAUDE_SKILL_DIR/SKILL.md" ]; then
 fi
 
 # Priority 2 — Walk known install locations in order:
-#   Codex global → Claude Code global → project-local variants
+#   Codex/universal global (.agents) → Claude Code global → fallbacks
 for CANDIDATE in \
-  "$HOME/.codex/skills/ui-forge" \
   "$HOME/.agents/skills/ui-forge" \
   "$HOME/.agentic/skills/ui-forge" \
   "$HOME/.claude/skills/ui-forge" \
