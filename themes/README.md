@@ -9,8 +9,7 @@ overriding anything the scanner actually detects.
 | Name | Library assumption |
 |------|--------------------|
 | `shadcn` | Tailwind + shadcn/ui primitives (Radix under the hood) |
-| `mantine` | Mantine 7+ with CSS-variables theming |
-| `plain-tailwind` | Vanilla Tailwind, no component library |
+| `stackshift` | StackShift UI — `@stackshift-ui` scoped packages, Sanity CMS theming, Next.js Image/Link via `StackShiftUIProvider` |
 
 ## Merge behavior
 

@@ -1,6 +1,6 @@
 ---
 name: ui-forge
-version: 0.1.9
+version: 0.2.1
 description: Generates production-ready Next.js TSX components from prompts and reference materials (HTML, TSX, images, JSON). Converts sections, pages, and variants using project design standards. Triggers on: "create component", "convert this HTML/TSX/page", "generate from image", or any frontend code generation request. Requires design/design-arch.json (auto-created on first use).
 ---
 

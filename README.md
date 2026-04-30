@@ -4,7 +4,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org)
 [![Skills Compatible](https://img.shields.io/badge/skills-compatible-blue)](https://github.com/vercel/skills-cli)
 
-> **Version** 0.1.9
+> **Version** 0.2.1
 
 Next.js component generator for Codex CLI, Claude Code, and other AI coding assistants. Converts HTML, TSX, images, and JSON reference materials into production-ready components that match your project's existing design system — using your actual component libraries, Tailwind tokens, and coding conventions.
 
@@ -149,44 +149,46 @@ Standards inject automatically into the generation system prompt — no template
 
 ### Built-in Design Standards
 
-Four canonical standard slots ship with UI Forge: `typography`, `spacing`, `color`, and `a11y`. They are empty by default — fill them in to give the AI project-specific guidance that takes priority over anything in the reference file.
+UI Forge ships a built-in StackShift UI standard organized as a directory (`references/standards/stackshift-ui/`) with eight focused files — one per concern. Each injects as its own slot and stays well within the 3,000-char per-slot limit, so nothing is compressed or truncated.
 
-**Option A — per-slot files (recommended):**
+The standard covers: import rules, the **`conditionalLink` → `<Button as="link">` rule**, full component props reference, color tokens with CSS variable defaults, typography scale, spacing and rhythm, project setup requirements, and accessibility conventions.
+
+**Directory support (0.2.1+):** Standards can now be a directory. Every `.md` file inside is loaded as its own slot (keyed by filename). This applies to built-in standards, project-local overrides, and explicit `design-arch.json` entries.
+
+Project-local standards go in `design/standards/` and are auto-registered by `scan.js`:
 
 ```
 design/standards/
-├── typography.md
-├── spacing.md
-├── color.md
-└── a11y.md
+├── typography.md          ← single-file slot
+├── motion/                ← directory: each .md inside is its own slot
+│   ├── transitions.md
+│   └── keyframes.md
+└── <custom-key>.md
 ```
 
-Run `/forge-scan` after creating them. The scanner auto-registers each file and they inject into every generation automatically.
-
-**Option B — custom keys via `design-arch.json`:**
+Or reference explicitly from `design-arch.json`:
 
 ```json
 "designStandards": {
-  "componentGuide": "./docs/component-guide.md",
-  "motion": "./design/motion.md"
+  "motion": "./design/standards/motion.md",
+  "brand-guidelines": "./design/standards/brand/"
 }
 ```
 
-Custom keys are additive — they stack on top of the four canonical slots. Opt out of built-in fallbacks with `--no-default-standards` or `"_useBuiltins": false` in `design-arch.json`.
+Opt out of all built-in standards with `--no-default-standards` or `"_useBuiltins": false` in `design-arch.json`.
 
-See [Built-in Design Standards](./references/standards/README.md) for the full resolution order and template format.
+See [Built-in Design Standards](./references/standards/README.md) for the full resolution order, directory support details, and how to author new slots.
 
 ### Theme Starters
 
 For fresh or greenfield projects, seed `design-arch.json` from a built-in preset instead of waiting for the scanner to find enough to work with:
 
 ```bash
-node "$SKILL_ROOT/scripts/scan.js" --theme shadcn          # Tailwind + shadcn/ui
-node "$SKILL_ROOT/scripts/scan.js" --theme mantine         # Mantine 7+
-node "$SKILL_ROOT/scripts/scan.js" --theme plain-tailwind  # Vanilla Tailwind
+node "$SKILL_ROOT/scripts/scan.js" --theme shadcn       # Tailwind + shadcn/ui
+node "$SKILL_ROOT/scripts/scan.js" --theme stackshift   # StackShift UI (@stackshift-ui packages)
 ```
 
-Or with the slash command: `/forge-scan --theme shadcn`
+Or with the slash command: `/forge-scan --theme stackshift`
 
 Themes are **gap-fill only** — scan findings always win. A theme fills `componentLib`, `usedComponents`, `usedLibraries`, `colorTokens`, and `patterns.*` only when the scanner couldn't detect them. The applied theme is recorded as `arch._theme` in `design-arch.json`.
 
@@ -296,8 +298,8 @@ Exit `1` on violations (missing default export, disallowed named exports, requir
 - **[Advanced Usage](./references/advanced-usage.md)** — PostToolUse auto-verify hook, custom signals, troubleshooting, CI/CD integration
 - **[Examples](./references/examples.md)** — Real-world conversion walkthroughs with full outputs
 - **[Prompt Patterns](./references/prompt-patterns.md)** — Signal composition reference for extending UI Forge
-- **[Built-in Themes](./themes/README.md)** — Available theme starters (`shadcn`, `mantine`, `plain-tailwind`), merge behavior, and how to apply via `scan.js --theme <name>`
-- **[Built-in Design Standards](./references/standards/README.md)** — Four canonical standard slots (`typography`, `spacing`, `color`, `a11y`), resolution order, and how to author project-local overrides
+- **[Built-in Themes](./themes/README.md)** — Available theme starters (`shadcn`, `stackshift`), merge behavior, and how to apply via `scan.js --theme <name>`
+- **[Built-in Design Standards](./references/standards/README.md)** — `stackshift-ui` built-in standard (consolidated StackShift UI conventions), resolution order, and how to author project-local overrides
 - **[Versions](./references/versions.md)** — Node, Next.js, StackShift, component library compatibility matrix
 
 **CLI flags** (passed to `/forge` in Claude Code, or directly to `invoke.js` in Codex CLI / other agents):
@@ -327,7 +329,7 @@ Exit `1` on violations (missing default export, disallowed named exports, requir
 | `--quick` | Skip the optional `claude` CLI synthesis branch (static analysis only) |
 | `--ignore <file>` | Load an additional ignore file (repeatable) |
 | `--no-default-ignore` | Skip the built-in base ignore list |
-| `--theme <name>` | Seed `design-arch.json` from `themes/<name>.json` (gap-fill only). Available: `shadcn`, `mantine`, `plain-tailwind`. |
+| `--theme <name>` | Seed `design-arch.json` from `themes/<name>.json` (gap-fill only). Available: `shadcn`, `stackshift`. |
 
 ## Changelog
 
@@ -335,6 +337,8 @@ Full release notes are in [`change-logs/`](./change-logs/).
 
 | Version | Date | Notes |
 |---------|------|-------|
+| [0.2.1](./change-logs/0-2-1-directory-standards-and-stackshift-ui.md) | 2026-04-30 | Directory support for design standards — `loadDesignStandards()` now scans subdirectories; `references/standards/stackshift-ui/` replaces the compressed single file with 8 focused uncompressed files (import rule, conditionalLink, component props, color tokens, typography, spacing, setup, a11y) |
+| [0.2.0](./change-logs/0-2-0-stackshift-ui-standards-and-theme.md) | 2026-04-30 | `stackshift-ui` built-in StackShift UI standard and `stackshift` theme preset introduced; `sample-standard.md` template added |
 | [0.1.9D](./change-logs/0-1-9D-claude-design-integration.md) | 2026-04-27 | Claude Design integration: `--handoff <url>` fetches handoffs and generates with `+CLAUDE_DESIGN` token remapping; `/forge-export-design` exports `design-arch.json` as an ingestible bundle for Claude Design onboarding |
 | [0.1.9C](./change-logs/0-1-9C-plan-validation-and-fallback-warning.md) | 2026-04-27 | `validatePagePlan()` in `invoke.js` validates `forge-page-plan.json` schema before Stage 2 and exits with a clear per-field error; `scan.js` now emits a loud banner on stderr whenever AI synthesis falls back to static analysis |
 | [0.1.9B](./change-logs/0-1-9B-auto-verify-hook.md) | 2026-04-27 | `verify.js` single-arg mode with `// @contract <path>` auto-detection; PostToolUse hook snippet for automatic contract verification on every component write; `SIGNAL_VARIANT` FORGE NOTES template updated with machine-readable directive |

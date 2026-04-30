@@ -32,7 +32,7 @@
  */
 
 import {
-  readFileSync, writeFileSync, existsSync, statSync,
+  readFileSync, writeFileSync, existsSync, statSync, readdirSync,
 } from 'fs'
 import { join, resolve, extname, basename, dirname } from 'path'
 import { fileURLToPath } from 'url'
@@ -46,7 +46,6 @@ const PLAN_PATH = join(PROJECT_ROOT, 'design', 'forge-page-plan.json')
 const STACKSHIFT_MARKER = join(PROJECT_ROOT, '.stackshift', 'installed.json')
 const CLAUDE_SKILL_DIR = join(__dirname, '..')
 const BUILTIN_STANDARDS_DIR = join(CLAUDE_SKILL_DIR, 'references', 'standards')
-const BUILTIN_STANDARD_KEYS = ['typography', 'spacing', 'color', 'a11y']
 const DIVIDER = '─'.repeat(60)
 const DEFAULT_CONTRACT_VERSION = '1.0.0'
 const SUPPORTED_CONTRACT_VERSIONS = ['1.0.0']
@@ -158,50 +157,98 @@ function loadDesignArch() {
 }
 
 // Resolution order (last wins per key):
-//   1. arch.designStandards  — explicit, includes stackshiftComponentStandard
-//   2. PROJECT_ROOT/design/standards/<key>.md — project-local override
-//   3. CLAUDE_SKILL_DIR/references/standards/<key>.md — built-in fallback (gap-fill only)
+//   1. arch.designStandards  — explicit file or directory paths
+//   2. PROJECT_ROOT/design/standards/<key>.md or <key>/ — project-local override
+//   3. CLAUDE_SKILL_DIR/references/standards/<key>.md or <key>/ — built-in fallback
+//
+// Directory support: if a path resolves to a directory, every .md file inside is
+// loaded as its own slot (key = filename minus .md, sorted alphabetically).
+// This lets large standard sets be split into focused files without hitting the
+// per-slot 3000-char truncation limit.
+//
 // Opt-out of step 3: pass opts.useBuiltins = false, or set
 // arch.designStandards._useBuiltins = false.
 function loadDesignStandards(arch, opts = {}) {
   const standards = {}
   const sources = {}  // key → 'arch' | 'project' | 'built-in'
 
-  // Step 1 — explicit arch entries
+  // Load a single file or every .md in a directory into standards/sources.
+  // Returns without overwriting keys already present when skipExisting=true.
+  function loadPath(fullPath, source, skipExisting = false) {
+    if (!existsSync(fullPath)) return
+    const st = statSync(fullPath)
+    if (st.isDirectory()) {
+      const files = readdirSync(fullPath).filter(f => f.endsWith('.md')).sort()
+      for (const file of files) {
+        const slotKey = file.replace(/\.md$/, '')
+        if (skipExisting && standards[slotKey]) continue
+        const content = readFileSync(join(fullPath, file), 'utf-8')
+        if (source === 'built-in' && !isSubstantive(content)) continue
+        standards[slotKey] = content
+        sources[slotKey] = source
+      }
+    } else {
+      const slotKey = basename(fullPath, '.md')
+      if (skipExisting && standards[slotKey]) return
+      const content = readFileSync(fullPath, 'utf-8')
+      if (source === 'built-in' && !isSubstantive(content)) return
+      standards[slotKey] = content
+      sources[slotKey] = source
+    }
+  }
+
+  // Step 1 — explicit arch entries (file or directory paths)
   const archStandards = arch.designStandards ?? {}
-  for (const [key, path] of Object.entries(archStandards)) {
+  for (const [key, relPath] of Object.entries(archStandards)) {
     if (key.startsWith('_')) continue  // skip meta keys like _useBuiltins
-    const fullPath = join(PROJECT_ROOT, path)
-    if (existsSync(fullPath)) {
+    const fullPath = join(PROJECT_ROOT, relPath)
+    if (!existsSync(fullPath)) {
+      process.stderr.write(`Warning: Design standard not found: ${relPath}\n`)
+      continue
+    }
+    const st = statSync(fullPath)
+    if (st.isDirectory()) {
+      loadPath(fullPath, 'arch')
+    } else {
       standards[key] = readFileSync(fullPath, 'utf-8')
       sources[key] = 'arch'
-    } else {
-      process.stderr.write(`Warning: Design standard not found: ${path}\n`)
     }
   }
 
-  // Step 2 — project-local override for standard keys we haven't filled yet
-  // (arch entry wins; this is a no-op for keys already present from step 1).
-  for (const key of BUILTIN_STANDARD_KEYS) {
-    if (standards[key]) continue
-    const projectPath = join(PROJECT_ROOT, 'design', 'standards', `${key}.md`)
-    if (existsSync(projectPath)) {
-      standards[key] = readFileSync(projectPath, 'utf-8')
-      sources[key] = 'project'
+  // Step 2 — project-local: scan design/standards/ for .md files and directories
+  const projectStandardsDir = join(PROJECT_ROOT, 'design', 'standards')
+  if (existsSync(projectStandardsDir)) {
+    for (const entry of readdirSync(projectStandardsDir).sort()) {
+      const entryPath = join(projectStandardsDir, entry)
+      const st = statSync(entryPath)
+      if (st.isDirectory()) {
+        loadPath(entryPath, 'project', true)
+      } else if (entry.endsWith('.md')) {
+        const slotKey = entry.replace(/\.md$/, '')
+        if (!standards[slotKey]) {
+          standards[slotKey] = readFileSync(entryPath, 'utf-8')
+          sources[slotKey] = 'project'
+        }
+      }
     }
   }
 
-  // Step 3 — built-in fallback (gap-fill only; non-empty templates only)
+  // Step 3 — built-in fallback: scan references/standards/ for .md files and directories
   const useBuiltins = opts.useBuiltins !== false && archStandards._useBuiltins !== false
   if (useBuiltins) {
-    for (const key of BUILTIN_STANDARD_KEYS) {
-      if (standards[key]) continue
-      const p = join(BUILTIN_STANDARDS_DIR, `${key}.md`)
-      if (!existsSync(p)) continue
-      const content = readFileSync(p, 'utf-8')
-      if (!isSubstantive(content)) continue  // empty template → skip
-      standards[key] = content
-      sources[key] = 'built-in'
+    for (const entry of readdirSync(BUILTIN_STANDARDS_DIR).sort()) {
+      const entryPath = join(BUILTIN_STANDARDS_DIR, entry)
+      const st = statSync(entryPath)
+      if (st.isDirectory()) {
+        loadPath(entryPath, 'built-in', true)
+      } else if (entry.endsWith('.md')) {
+        const slotKey = entry.replace(/\.md$/, '')
+        if (standards[slotKey]) continue
+        const content = readFileSync(entryPath, 'utf-8')
+        if (!isSubstantive(content)) continue
+        standards[slotKey] = content
+        sources[slotKey] = 'built-in'
+      }
     }
   }
 

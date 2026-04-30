@@ -1,89 +1,84 @@
-# Design Standards — Built-in Templates
+# Design Standards — Built-in Files
 
-This directory holds skill-owned fallback standards injected into the generation
-context when the target project hasn't defined its own. The four canonical
-slots are:
+This directory holds skill-owned fallback standards injected into generation context when a target project hasn't defined its own. Standards support both single `.md` files and directories of `.md` files.
 
-| Key | File | Scope |
-|-----|------|-------|
-| `typography` | `typography.md` | Heading scale, line-height, letter-spacing, fluid type |
-| `spacing`    | `spacing.md`    | Container widths, section padding, gap defaults |
-| `color`      | `color.md`      | Semantic token discipline, contrast floors, dark-mode parity |
-| `a11y`       | `a11y.md`       | Focus states, landmarks, labels, motion preferences |
+## Current built-in standards
 
-**The templates in this directory ship EMPTY by default.** They are intentional
-placeholders — a skill maintainer may fill them in later, but UI Forge will
-skip any template whose body contains only HTML comments or headings. Empty
-templates do not appear in generation context and do not interfere with the
-AI's defaults.
+| Path | Slots injected | Status |
+|------|---------------|--------|
+| `stackshift-ui/` | `01-import-rule`, `02-conditional-link`, `03-component-props`, `04-color-tokens`, `05-typography`, `06-spacing`, `07-setup`, `08-accessibility` | Active — full StackShift UI conventions |
+| `sample-standard.md` | — | Non-substantive template; copy to create a new slot |
+
+## Directory support (0.2.1+)
+
+When `loadDesignStandards()` encounters a directory (in any of the three resolution steps), it reads every `.md` file inside alphabetically and loads each as its own slot. The slot key is the filename minus `.md`.
+
+This lets large design systems be split into focused files — each stays under the 3,000-char per-slot injection limit without compression.
 
 ## Resolution order (last wins per key)
 
 Used by `scripts/invoke.js` `loadDesignStandards()`:
 
-1. **`arch.designStandards`** — explicit entries in `design/design-arch.json`.
-   Includes `stackshiftComponentStandard` for paired-mode projects.
-2. **Project override** — `PROJECT_ROOT/design/standards/<key>.md`.
-   Auto-registered by `scripts/scan.js` at scan time.
-3. **Built-in fallback** — this directory. Gap-fill only; never overwrites a
-   project-supplied or arch-referenced standard.
+1. **`arch.designStandards`** — explicit entries in `design/design-arch.json`. Values can be a file path or a directory path.
+2. **Project override** — `PROJECT_ROOT/design/standards/` is fully scanned. Both `.md` files and subdirectories are registered. Re-run `scripts/scan.js` after adding files.
+3. **Built-in fallback** — this directory. Gap-fill only; never overwrites a project-supplied or arch-referenced standard.
 
-Opt-out of step 3 with the `--no-default-standards` flag on `invoke.js`, or by
-setting `"_useBuiltins": false` inside `arch.designStandards`.
+Opt-out of step 3 with the `--no-default-standards` flag on `invoke.js`, or by setting `"_useBuiltins": false` inside `arch.designStandards`.
 
 ## Adding project-local standards
 
-Two ways, both auto-detected:
-
-**Option A — one file per slot** (recommended; matches the built-in structure):
+**Option A — single file per slot:**
 
 ```
 PROJECT_ROOT/
 └── design/
     └── standards/
-        ├── typography.md
-        ├── spacing.md
-        ├── color.md
-        └── a11y.md
+        ├── typography.md       ← slot key: "typography"
+        ├── motion.md           ← slot key: "motion"
+        └── brand-voice.md      ← slot key: "brand-voice"
 ```
 
-Scan auto-registers each `*.md` file in `design/standards/` using the filename
-(minus `.md`) as the key. Re-run `scripts/scan.js` after adding files.
+**Option B — directory of files:**
 
-**Option B — custom key referenced from `design-arch.json`**:
+```
+PROJECT_ROOT/
+└── design/
+    └── standards/
+        └── brand/              ← each .md inside is its own slot
+            ├── voice.md        ← slot key: "voice"
+            ├── colors.md       ← slot key: "colors"
+            └── imagery.md      ← slot key: "imagery"
+```
+
+**Option C — explicit reference from `design-arch.json`:**
 
 ```json
 {
   "designStandards": {
-    "componentGuide": "./docs/component-guide.md",
-    "animation": "./design/motion.md"
+    "motion": "./design/standards/motion.md",
+    "brand": "./design/standards/brand/"
   }
 }
 ```
 
-Any path and any key are valid. Custom keys are additive — they don't replace
-the four canonical slots.
+Any path and any key are valid. File and directory entries are additive — they stack on top of built-in standards.
 
-## Filling in a built-in template
+## Adding a new built-in standard
 
-If you're vendoring this skill and want every install to ship with opinionated
-defaults, edit the template files in place. Anything beyond HTML comments and
-markdown headings will make the template count as "substantive" and start
-flowing into generation context for projects that don't override the slot.
+**Single file:** Copy `sample-standard.md`, rename to your slot key (e.g. `motion.md`), and fill in content. Any content beyond HTML comments and markdown headings is treated as substantive.
 
-Keep each file under ~3,000 characters — the injector truncates past that and
-logs a stderr warning.
+**Directory:** Create a subdirectory (e.g. `my-system/`) and add `.md` files inside. Each file becomes a slot.
+
+Keep each file under **~3,000 characters** — `appendStandards()` in `invoke.js` truncates at 3,000 and logs a stderr warning.
 
 ## Source markers in context
 
-Each standard block injected into the generation context includes a one-line
-source marker:
+Each standard block injected into generation context carries a source marker:
 
 ```
-// --- STANDARD: typography ---
+// --- STANDARD: 02-conditional-link ---
 # source: built-in
 <...content...>
 ```
 
-`source` is `arch`, `project`, or `built-in` — the AI can use this to reason
-about authority when standards conflict.
+`source` is `arch`, `project`, or `built-in`. The AI uses this to reason about authority when standards conflict.
