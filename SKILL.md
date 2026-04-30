@@ -1,7 +1,7 @@
 ---
 name: ui-forge
-version: 0.2.1
-description: Generates production-ready Next.js TSX components from prompts and reference materials (HTML, TSX, images, JSON). Converts sections, pages, and variants using project design standards. Triggers on: "create component", "convert this HTML/TSX/page", "generate from image", or any frontend code generation request. Requires design/design-arch.json (auto-created on first use).
+version: 0.2.2
+description: 'Production Next.js component generator. Converts HTML, TSX, images, and JSON into project-compliant components using your design system. Triggers on component creation, HTML/TSX conversion, page generation, image-to-component tasks, or any frontend code generation request. Requires a one-time scan to build design/design-arch.json.'
 ---
 
 # UI Forge
@@ -133,7 +133,7 @@ If detection fails, set the path explicitly:
 
 ```bash
 # Codex CLI global install
-SKILL_ROOT="$HOME/.agents/skills/ui-forge"
+SKILL_ROOT="$HOME/.codex/skills/ui-forge"
 
 # Claude Code global install
 SKILL_ROOT="$HOME/.claude/skills/ui-forge"

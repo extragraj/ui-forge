@@ -15,10 +15,13 @@ fi
 # Priority 2 — Walk known install locations in order:
 #   Codex global → Claude Code global → project-local variants
 for CANDIDATE in \
+  "$HOME/.codex/skills/ui-forge" \
   "$HOME/.agents/skills/ui-forge" \
+  "$HOME/.agentic/skills/ui-forge" \
   "$HOME/.claude/skills/ui-forge" \
   "/etc/codex/skills/ui-forge" \
   "./.agents/skills/ui-forge" \
+  "./.agentic/skills/ui-forge" \
   "./.claude/skills/ui-forge"; do
   if [ -f "$CANDIDATE/SKILL.md" ]; then
     cd "$CANDIDATE" && echo "$(pwd)" && exit 0
