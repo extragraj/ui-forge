@@ -81,6 +81,17 @@ function install() {
   }
   writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
 
+  // Write .forgeignore for StackShift projects if one doesn't already exist
+  const stackshiftMarker = join(cwd, '.stackshift', 'installed.json');
+  const forgeignorePath = join(cwd, '.forgeignore');
+  if (existsSync(stackshiftMarker) && !existsSync(forgeignorePath)) {
+    const template = join(SKILL_ROOT, 'references', 'default-stackshift-forgeignore.txt');
+    if (existsSync(template)) {
+      writeFileSync(forgeignorePath, readFileSync(template, 'utf8'), 'utf8');
+      console.log('.forgeignore created from StackShift template.\n');
+    }
+  }
+
   console.log('UI Forge install complete.\n');
   console.log(`Commands written to ${commandsDir}:`);
   for (const f of written) console.log(`  ${f}`);

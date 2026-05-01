@@ -4,7 +4,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org)
 [![Skills Compatible](https://img.shields.io/badge/skills-compatible-blue)](https://github.com/vercel/skills-cli)
 
-> **Version** 0.2.2
+> **Version** 0.2.3
 
 Next.js component generator for Codex CLI, Claude Code, and other AI coding assistants. Converts HTML, TSX, images, and JSON reference materials into production-ready components that match your project's existing design system — using your actual component libraries, Tailwind tokens, and coding conventions.
 
@@ -367,6 +367,7 @@ Full release notes are in [`change-logs/`](./change-logs/).
 
 | Version | Date | Notes |
 |---------|------|-------|
+| [0.2.3](./change-logs/0-2-3-windows-synthesis-fix.md) | 2026-05-01 | Windows synthesis fix — prompt passed via stdin to avoid CMD.exe special-char mangling; `SYNTHESIS_PROMPT` redesigned to pass file paths (Claude reads them with its Read tool) instead of embedding raw CSS/JS content, cutting prompt size ~69% and enabling component-level pattern detection; StackShift `.forgeignore` auto-created on `install`; Haiku model documented in SKILL.md |
 | [0.2.2B](./change-logs/0-2-2B-theme-and-preview-fixes.md) | 2026-04-30 | Added missing `mantine` and `plain-tailwind` theme presets; `--preview` confirmation moved to stdout (was stderr, invisible in Claude Code slash command output) |
 | [0.2.2A](./change-logs/0-2-2A-token-efficiency-and-lite-optimization.md) | 2026-04-30 | Token Optimization: Introduced `--lite` mode (~90% context reduction), context-aware standards filtering, and fixed CLI-vs-Config precedence logic |
 | [0.2.2](./change-logs/0-2-2-skills-cli-compatibility.md) | 2026-04-30 | Skills CLI compatibility — quoted SKILL.md `description` to fix `yaml` v2 strict-YAML parse failure (colon-space in plain scalar caused "No valid skills found" on every install); `detect.sh` updated with correct Codex global path (`~/.codex/skills/`) and `.agentic` fallback |

@@ -1,0 +1,61 @@
+# Tests
+tests/**
+
+# Studio
+studio/**
+
+# Schemas
+schemas/**
+
+# Ecwid
+components/ecwid/**
+
+# E-commerce Sections
+components/sections/all_products/**
+components/sections/cart_section/**
+components/sections/featured_products/**
+components/sections/pages_productInfo/**
+components/sections/product_info/**
+components/sections/pricing/**
+
+# Theme Settings
+components/theme-settings/**
+components/ThemeSettings.tsx
+
+# Layout & Common
+components/common/**
+components/layout.tsx
+components/page/**
+
+# Inline Editor
+components/InlineEditor.tsx
+components/InlineEditorContainer.tsx
+
+# Preview
+components/PreviewBanner.tsx
+components/PreviewNoContent.tsx
+components/PreviewNoHomePage.tsx
+
+# SEO & Meta
+components/SEO.tsx
+
+# Sections (Excluded)
+components/sections/social_media_feed/**
+components/sections/wishlist/**
+
+# List Components
+components/list.tsx
+
+# Utility & Config
+components/CheckoutForm.tsx
+components/data/dynamic.ts
+components/sections/features/variant_i.tsx
+context/**
+hooks/index.ts
+lib/**
+pages/_app.tsx
+playwright/**
+playwright.config.ts
+sanity.config.ts
+types.ts
+utils/**

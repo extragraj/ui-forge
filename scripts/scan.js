@@ -316,7 +316,7 @@ function readTailwindConfig() {
     if (!existsSync(p)) continue
     const raw = readFileSync(p, 'utf-8')
     const m = raw.match(/theme\s*:\s*\{([\s\S]*?)\n\s*\},?\s*(?:plugins|module\.exports|\})/m)
-    return { themeSection: (m?.[1] ?? raw).slice(0, 2500) }
+    return { themeSection: (m?.[1] ?? raw).slice(0, 2500), path: n }
   }
   return null
 }
@@ -328,7 +328,7 @@ function readGlobalCss() {
   ]) {
     const p = join(PROJECT_ROOT, n)
     if (!existsSync(p)) continue
-    return readFileSync(p, 'utf-8').slice(0, 3000)
+    return { content: readFileSync(p, 'utf-8').slice(0, 3000), path: n }
   }
   return null
 }
@@ -463,16 +463,18 @@ function extractDarkTokens(files) {
 
 // ─── AI synthesis ─────────────────────────────────────────────────────────────
 
-const SYNTHESIS_PROMPT = (payload) => `Analyze this Next.js project's design system. Return ONLY valid JSON, no markdown.
+const SYNTHESIS_PROMPT = (payload) => `Analyze this Next.js project's design system. Use the Read tool to read each file listed below, then return ONLY valid JSON with no markdown.
 
-${payload.claudeMd ? `PROJECT NOTES (CLAUDE.md):\n${payload.claudeMd}\n` : ''}
-TAILWIND THEME:\n${payload.tailwindTheme || 'not found'}
+${payload.claudeMd ? `PROJECT NOTES (CLAUDE.md):\n${payload.claudeMd}\n\n` : ''}DESIGN SYSTEM FILES (read these to understand the design foundation):
+- ${payload.tailwindPath}
+- ${payload.globalCssPath}
 
-GLOBAL CSS:\n${payload.globalCss || 'not found'}
+COMPONENT FILES (read these to understand actual Tailwind spacing/typography usage patterns):
+${payload.componentFiles.map(f => `- ${f}`).join('\n')}
 
-TOP PACKAGES (by import count):\n${payload.topPackages}
+TOP PACKAGES (by import count): ${payload.topPackages}
 
-Return this JSON shape exactly:
+After reading the files, return this JSON shape exactly:
 {"spacing":"<1-2 sentences: dominant section/container padding pattern>","typography":"<1-2 sentences: font usage and heading patterns>","colorTokens":"<comma-separated key token names>","conventions":["<up to 5 short conventions>"],"isStackShift":<true|false>}`
 
 function warnSynthesisFallback(reason) {
@@ -489,7 +491,7 @@ function warnSynthesisFallback(reason) {
 
 function tryClaudeCLI(payload) {
   // Check if claude CLI is available (Claude Code, Cursor, AntiGravity, etc.)
-  const check = spawnSync('claude', ['--version'], { encoding: 'utf-8', stdio: 'pipe' })
+  const check = spawnSync('claude', ['--version'], { encoding: 'utf-8', stdio: 'pipe', shell: true })
   if (check.error || check.status !== 0) {
     warnSynthesisFallback('claude CLI not found')
     return null
@@ -497,14 +499,18 @@ function tryClaudeCLI(payload) {
 
   process.stderr.write('  using claude CLI for synthesis\n')
   const prompt = SYNTHESIS_PROMPT(payload)
+  // Windows fix: pass prompt via stdin (input option) instead of as a -p <prompt> arg.
+  // CMD.exe mangles special chars (& % @ " { }) when concatenated as shell args.
+  // -p without an inline prompt reads from stdin ("useful for pipes" — claude --help).
+  // shell: true retained so Node resolves claude.cmd on Windows.
   const result = spawnSync(
     'claude',
-    ['-p', prompt, '--model', 'claude-haiku-4-5-20251001', '--output-format', 'text'],
-    { encoding: 'utf-8', stdio: 'pipe', timeout: 45000, maxBuffer: 512 * 1024 }
+    ['-p', '--no-session-persistence', '--model', 'claude-haiku-4-5-20251001', '--output-format', 'text'],
+    { encoding: 'utf-8', stdio: 'pipe', timeout: 120000, maxBuffer: 512 * 1024, shell: true, input: prompt }
   )
   if (result.error) {
     const reason = result.error?.code === 'ETIMEDOUT'
-      ? 'claude CLI timed out after 45s'
+      ? 'claude CLI timed out after 120s'
       : `claude CLI error: ${result.error.message}`
     warnSynthesisFallback(reason)
     return null
@@ -566,9 +572,22 @@ function main() {
   const darkColorTokens = SCHEMA_V4 ? extractDarkTokens(files) : null
   if (SCHEMA_V4) process.stderr.write(`  schema v4: dark token extraction ${darkColorTokens ? `found ${darkColorTokens.split(',').length} tokens` : 'no dark: classes found'}\n`)
 
+  // Build relative forward-slash component paths for synthesis prompt.
+  // Filter to .tsx/.jsx only; cap at 12 for synthesis speed.
+  const componentFiles = files
+    .map(f => relative(PROJECT_ROOT, f).replace(/\\/g, '/'))
+    .filter(f => /\.(tsx|jsx)$/.test(f))
+    .slice(0, 12)
+
   process.stderr.write('  synthesizing patterns...\n')
   const s = synthesize(
-    { tailwindTheme: tailwind?.themeSection, globalCss, claudeMd, topPackages },
+    {
+      tailwindPath: tailwind?.path ?? 'tailwind.config.ts',
+      globalCssPath: globalCss?.path ?? 'styles/globals.css',
+      claudeMd,
+      topPackages,
+      componentFiles,
+    },
     pkgCount
   )
 
@@ -604,7 +623,7 @@ function main() {
     usedComponents,
     usedLibraries,
     tailwind: tailwindField,
-    globalCss: globalCss ? globalCss.slice(0, 2000) : null,
+    globalCss: globalCss?.content.slice(0, 2000) ?? null,
     designStandards,  // object keyed by standard name → relative path
     patterns: {
       ...(existing.patterns ?? {}),

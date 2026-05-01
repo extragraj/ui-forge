@@ -1,6 +1,6 @@
 ---
 name: ui-forge
-version: 0.2.2
+version: 0.2.3
 description: 'Production Next.js component generator. Converts HTML, TSX, images, and JSON into project-compliant components using your design system. Triggers on component creation, HTML/TSX conversion, page generation, image-to-component tasks, or any frontend code generation request. Requires a one-time scan to build design/design-arch.json.'
 ---
 
@@ -32,6 +32,11 @@ Contains: component directories, used libraries, Tailwind tokens, global CSS, de
 
 No API key required by the scripts. Generation context is prepared by `invoke.js`; you
 generate the component from that context.
+
+**Scan synthesis model:** When the `claude` CLI is available (Claude Code, Cursor, etc.),
+`scan.js` uses `claude-haiku-4-5-20251001` for design-system pattern synthesis — fast and
+cost-effective. Falls back to static analysis automatically when the CLI is not found; no
+error and no API key required in either case.
 
 ## Usage
 
