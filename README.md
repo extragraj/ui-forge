@@ -4,7 +4,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org)
 [![Skills Compatible](https://img.shields.io/badge/skills-compatible-blue)](https://github.com/vercel/skills-cli)
 
-> **Version** 0.2.6
+> **Version** 0.2.7
 
 Next.js component generator for Codex CLI, Claude Code, and other AI coding assistants. Converts HTML, TSX, images, and JSON reference materials into production-ready components that match your project's existing design system — using your actual component libraries, Tailwind tokens, and coding conventions.
 
@@ -237,9 +237,14 @@ node "$SKILL_ROOT/scripts/cli.js" scan --theme plain-tailwind  # No component li
 node "$SKILL_ROOT/scripts/cli.js" scan --theme stackshift    # StackShift UI
 ```
 
-Or with the slash command: `/forge-scan --theme shadcn`
+Or with the slash command: `/forge-scan --theme shadcn` (or `--theme stackshift`)
 
 Themes are **gap-fill only** — scan findings always win. A theme fills `componentLib`, `usedComponents`, `usedLibraries`, `colorTokens`, and `patterns.*` only when the scanner couldn't detect them. The applied theme is recorded as `arch._theme` in `design-arch.json`.
+
+**StackShift-specific behavior:** `--theme stackshift` does three additional things beyond gap-fill:
+- Forces `isStackShift: true` in `design-arch.json` so the built-in `stackshift-ui` design standards are always injected at forge time — even on empty codebases, with `--quick`, or when the Claude CLI is unavailable.
+- Records the built-in `references/standards/stackshift-ui/` path under `designStandards["stackshift-ui"]`, making active standards visible and overridable at the project level.
+- `install` (run once after adding the skill) also wires the `variant-router` protocol into `designStandards` when stackshift-core is present, resolving `PAIRED: stackshift unknown` version detection.
 
 See [Built-in Themes](./themes/README.md) for the full preset list and merge rules.
 
@@ -267,7 +272,7 @@ Created by `scan.js` and cached until you re-run it. The v3 schema:
   "usedLibraries": [{ "name": "framer-motion", "version": "^12.0.0", "uses": 14 }],
   "tailwind": { "themeSection": "...", "colorTokens": "primary, secondary, accent" },
   "globalCss": "...",
-  "designStandards": { "stackshiftComponentStandard": "./design/standards/stackshift-ui.md" },
+  "designStandards": { "stackshift-ui": "./.claude/skills/ui-forge/references/standards/stackshift-ui" },
   "patterns": {
     "spacing": "4-based scale with py-20 sections",
     "typography": "font-sans default, headings font-bold",
@@ -386,6 +391,7 @@ Full release notes are in [`change-logs/`](./change-logs/).
 
 | Version | Date | Notes |
 |---------|------|-------|
+| [0.2.7](./change-logs/0-2-7-stackshift-theme-discoverability.md) | 2026-05-05 | StackShift integration fixes — `stackshift` added to all CLI help text (G-1); `--theme stackshift` now forces `isStackShift: true` so stackshift-ui standards are never skipped (G-2); `scan.js` creates `design/standards/` and records the built-in stackshift-ui path in `designStandards` (G-3); `install` wires `variant-router` into `design-arch.json` when stackshift-core is present (G-4) |
 | [0.2.6](./change-logs/0-2-6-validate-input-standalone-fix.md) | 2026-05-05 | `--validate-input` standalone fix — no longer requires `--task`; bypasses help block, emits targeted errors, exits 0 on pass (resolves A-1) |
 | [0.2.5](./change-logs/0-2-5-reference-based-design-authority.md) | 2026-05-05 | Reference-based Design Authority — both lite and non-lite modes now output path references instead of copying tailwind theme/CSS content inline; standards listed as `[REF] key [path]: description` load-on-demand refs; non-lite adds explicit IMPLEMENTATION and ANTI-SLOP GUARDRAILS sections (resolves H-1 and H-2) |
 | [0.2.4](./change-logs/0-2-4-platform-aware-install.md) | 2026-05-05 | Platform-aware install — `cli.js install` auto-detects which agentic platform the skill is in (Claude Code, Codex, Copilot, Cursor, Gemini) and writes slash commands + permissions to that platform's directory; new `scripts/detect.js` (Node.js, Windows-compatible) mirrors `detect.sh`; `detect.sh` now covers all 8 supported platforms; README and CLAUDE.md updated with cross-platform one-liner bootstrap commands (resolves I-1 and I-2) |

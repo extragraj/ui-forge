@@ -1,6 +1,6 @@
 ---
 name: ui-forge
-version: 0.2.6
+version: 0.2.7
 description: 'Production Next.js component generator. Converts HTML, TSX, images, and JSON into project-compliant components using your design system. Triggers on component creation, HTML/TSX conversion, page generation, image-to-component tasks, or any frontend code generation request. Requires a one-time scan to build design/design-arch.json.'
 ---
 
@@ -53,7 +53,9 @@ node .claude/skills/ui-forge/scripts/cli.js install
 ```
 
 Scans the project and creates `design/design-arch.json`. Accepts optional flags:
-`--theme shadcn|mantine|plain-tailwind`, `--schema-v4`, `--quick`.
+`--theme shadcn|mantine|plain-tailwind|stackshift`, `--schema-v4`, `--quick`.
+
+`--theme stackshift` is the correct flag for StackShift projects. It forces `isStackShift: true` in `design-arch.json` (ensuring the built-in `stackshift-ui` standards are injected at forge time regardless of codebase maturity), records `designStandards["stackshift-ui"]` pointing at the built-in standards directory, and creates `design/standards/` for project-level overrides.
 
 ```
 /forge --task "Convert hero section" --refs ./hero.html --output ./components/Hero.tsx
@@ -135,6 +137,7 @@ Use `cli.js` as the entry point — it proxies all commands through to the right
 node .claude/skills/ui-forge/scripts/cli.js scan
 node .claude/skills/ui-forge/scripts/cli.js scan --quick
 node .claude/skills/ui-forge/scripts/cli.js scan --theme shadcn
+node .claude/skills/ui-forge/scripts/cli.js scan --theme stackshift
 
 # Generate (output goes to stdout; pipe or read it, then generate)
 node .claude/skills/ui-forge/scripts/cli.js forge --task "Convert hero" --refs ./hero.html --output ./Hero.tsx

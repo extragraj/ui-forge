@@ -15,7 +15,7 @@
  *   node ${CLAUDE_SKILL_DIR}/scripts/scan.js --theme <name>             (seed baseline from themes/<name>.json; fills gaps only)
  *   node ${CLAUDE_SKILL_DIR}/scripts/scan.js --schema-v4                (emit v4 schema with darkColorTokens; version-gated)
  *
- * Available themes: shadcn, mantine, plain-tailwind.
+ * Available themes: shadcn, mantine, plain-tailwind, stackshift.
  *
  * Ignore precedence (last wins on conflict):
  *   built-in base → .gitignore → .agentic.ignore → .claude.ignore → .forgeignore → --ignore <file>
@@ -356,12 +356,28 @@ function findDesignStandards(isStackShift) {
         break
       }
     }
+
+    // G-3: record the built-in stackshift-ui standards directory so it's
+    // visible in design-arch.json for traceability and override discovery.
+    // invoke.js Step 3 already loads this directory, but without this entry
+    // designStandards appears empty even when the standards are active.
+    if (!standards['stackshift-ui']) {
+      const builtinPath = join(CLAUDE_SKILL_DIR, 'references', 'standards', 'stackshift-ui')
+      if (existsSync(builtinPath)) {
+        standards['stackshift-ui'] = './' + relative(PROJECT_ROOT, builtinPath).replace(/\\/g, '/')
+      }
+    }
+  }
+
+  // G-3: ensure design/standards/ exists so project-level overrides have a clear home
+  const standardsDir = join(PROJECT_ROOT, 'design', 'standards')
+  if (!existsSync(standardsDir)) {
+    try { mkdirSync(standardsDir, { recursive: true }) } catch {}
   }
 
   // Auto-register project-local standards shipped under design/standards/*.md.
   // Keys are the file basename (e.g. typography.md → "typography"). Existing
   // entries (including stackshiftComponentStandard above) are not overwritten.
-  const standardsDir = join(PROJECT_ROOT, 'design', 'standards')
   if (existsSync(standardsDir)) {
     try {
       for (const entry of readdirSync(standardsDir, { withFileTypes: true })) {
@@ -401,6 +417,10 @@ function loadTheme(name) {
 function applyTheme(arch, theme) {
   if (!theme) return arch
   const out = { ...arch, _theme: theme._theme ?? THEME_NAME }
+
+  // G-2: explicit --theme stackshift declaration forces isStackShift=true
+  // regardless of what synthesize() returned (handles empty codebases, --quick, no claude CLI)
+  if (out._theme === 'stackshift') out.isStackShift = true
 
   // componentLib — replace only if scan fell back to the single default
   const defaulted = Array.isArray(arch.componentLib)
@@ -600,8 +620,10 @@ function main() {
   // Discover component directories and design standards.
   // In patch mode we preserve existing designStandards entries verbatim, but
   // still auto-register any newly-added design/standards/*.md files.
+  // Use effective isStackShift: synthesis result OR forced true by --theme stackshift (G-2/G-3)
+  const effectiveIsStackShift = s.isStackShift || (theme?._theme === 'stackshift')
   const componentDirs = discoverComponentDirectories()
-  const discovered = findDesignStandards(s.isStackShift)
+  const discovered = findDesignStandards(effectiveIsStackShift)
   const designStandards = PATCH_MODE && existing.designStandards
     ? { ...discovered, ...existing.designStandards }
     : discovered

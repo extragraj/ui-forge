@@ -63,7 +63,7 @@ function install() {
     {
       file: 'forge-scan.md',
       description: 'Scan the project and create design/design-arch.json',
-      hint: '[--theme shadcn|mantine|plain-tailwind] [--schema-v4] [--quick]',
+      hint: '[--theme shadcn|mantine|plain-tailwind|stackshift] [--schema-v4] [--quick]',
       body: 'Run the UI Forge project scanner.\n\n' + run('scan.js'),
     },
     {
@@ -118,6 +118,27 @@ function install() {
     }
   }
 
+  // G-4: Wire variant-router standard into design-arch.json when StackShift is present.
+  // Requires design-arch.json to exist from a prior scan (reasonable post-install assumption).
+  const archPath = join(cwd, 'design', 'design-arch.json');
+  if (existsSync(stackshiftMarker) && existsSync(archPath)) {
+    try {
+      const arch = JSON.parse(readFileSync(archPath, 'utf8'));
+      if (!arch.designStandards?.['variant-router']) {
+        arch.designStandards = arch.designStandards ?? {};
+        // Path is relative to project root; resolves to the stackshift-core skill protocol
+        const variantRouterPath = join(platformDir, 'skills', 'stackshift-core', 'protocols', 'variant-router.md');
+        if (existsSync(variantRouterPath)) {
+          // Store as a relative posix path from project root
+          const rel = variantRouterPath.replace(cwd, '').replace(/\\/g, '/').replace(/^\//, './');
+          arch.designStandards['variant-router'] = rel;
+          writeFileSync(archPath, JSON.stringify(arch, null, 2) + '\n', 'utf8');
+          console.log('design-arch.json: variant-router standard linked.\n');
+        }
+      }
+    } catch {}
+  }
+
   console.log('UI Forge install complete.\n');
   console.log(`Commands written to ${commandsDir}:`);
   for (const f of written) console.log(`  ${f}`);
@@ -141,7 +162,7 @@ Commands:
   install          Wire slash commands and Bash permissions into the detected platform dir
   scan   [args]    Scan project → design/design-arch.json
                      --quick              Skip AI synthesis (fast, static only)
-                     --theme <name>       Seed from shadcn|mantine|plain-tailwind
+                     --theme <name>       Seed from shadcn|mantine|plain-tailwind|stackshift
                      --schema-v4          Extract dark: Tailwind tokens
   forge  [args]    Prepare generation context (read output, then generate)
                      --task "<task>"      What to build (required)
