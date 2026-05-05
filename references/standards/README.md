@@ -7,6 +7,7 @@ This directory holds skill-owned fallback standards injected into generation con
 | Path | Slots injected | Status |
 |------|---------------|--------|
 | `stackshift-ui/` | `01-import-rule`, `02-conditional-link`, `03-component-props`, `04-color-tokens`, `05-typography`, `06-spacing`, `07-setup`, `08-accessibility` | Active — full StackShift UI conventions |
+| `nextjs-image.md` | `nextjs-image` | Active — Next.js + Sanity image rendering standard (fill prop, urlFor type safety, container pattern, sizes attribute) |
 | `sample-standard.md` | — | Non-substantive template; copy to create a new slot |
 
 ## Directory support (0.2.1+)

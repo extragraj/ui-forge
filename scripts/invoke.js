@@ -40,6 +40,14 @@ import { spawnSync } from 'child_process'
 import { createHash } from 'crypto'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+
+// Force UTF-8 stdout encoding on Windows when piped (fixes PowerShell UTF-16 LE
+// redirection — E-1). This ensures process.stdout.write() uses UTF-8 even when
+// the shell's default encoding is UTF-16 LE.
+if (process.platform === 'win32' && !process.stdout.isTTY) {
+  process.stdout.setDefaultEncoding('utf8')
+}
+
 const PROJECT_ROOT = process.cwd()
 const ARCH_PATH = join(PROJECT_ROOT, 'design', 'design-arch.json')
 const PLAN_PATH = join(PROJECT_ROOT, 'design', 'forge-page-plan.json')

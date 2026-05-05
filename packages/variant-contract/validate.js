@@ -53,12 +53,22 @@ export function parseProps(src, name) {
 /**
  * @param {string} outputSrc   Generated component source
  * @param {string} contractSrc Props interface source
+ * @param {{ pairedMode?: boolean }} [options]
  * @returns {{ valid: boolean, violations: string[], warnings: string[], meta: object }}
  */
-export function validate(outputSrc, contractSrc) {
+export function validate(outputSrc, contractSrc, options = {}) {
+  const { pairedMode = false } = options
   const ifaceName = parseInterfaceName(contractSrc)
   const contractVersion = parseContractVersion(contractSrc)
   const { required, optional } = parseProps(contractSrc, ifaceName)
+
+  // In paired (StackShift) mode, one named export matching the default export is required
+  // by the Variant Router — resolve that name so we can permit it below.
+  const pairedDefaultName = pairedMode
+    ? (outputSrc.match(/export\s+default\s+function\s+(\w+)/)?.[1]
+      ?? outputSrc.match(/export\s+default\s+(\w+)/)?.[1]
+      ?? null)
+    : null
 
   const violations = []
   const warnings = []
@@ -71,7 +81,10 @@ export function validate(outputSrc, contractSrc) {
   let bm; const nbRe = /export\s*\{([^}]+)\}/g
   while ((bm = nbRe.exec(outputSrc)) !== null)
     bm[1].split(',').map(s => s.trim().split(/\s+as\s+/)[0]).filter(Boolean)
-      .forEach(n => namedExports.push(`export { ${n} }`))
+      .forEach(n => {
+        if (pairedDefaultName && n === pairedDefaultName) return
+        namedExports.push(`export { ${n} }`)
+      })
   let dm; const ndRe = /export\s+(?:const|let|var|function|class|interface|type|enum)\s+(\w+)/g
   while ((dm = ndRe.exec(outputSrc)) !== null) {
     if (dm[1] === ifaceName && /export\s+(?:interface|type)/.test(dm[0]))

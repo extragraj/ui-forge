@@ -102,6 +102,22 @@ node "$SKILL_ROOT/scripts/cli.js" export
 node "$SKILL_ROOT/scripts/cli.js" help
 ```
 
+### Capturing Forge Stdout Output
+
+When running `forge` from a terminal, the generation context is written to stdout. To save it to a file for inspection or reuse as a `--refs` input:
+
+```bash
+# sh / bash / PowerShell (CMD)
+node "$SKILL_ROOT/scripts/cli.js" forge --task "Convert hero" --refs ./hero.html > forge-output.md
+
+# PowerShell (explicit UTF-8 — alternative if encoding issues persist)
+node "$SKILL_ROOT/scripts/cli.js" forge --task "Convert hero" --refs ./hero.html | Out-File -Encoding utf8 forge-output.md
+```
+
+> **Windows note:** Starting with v0.2.7C, `invoke.js` forces UTF-8 encoding on piped stdout, so `>` redirection in CMD and PowerShell produces clean UTF-8 output. If you still see garbled text (every character spaced out), use the `Out-File -Encoding utf8` variant above.
+
+The captured file can later be passed as a `--refs` input to another forge run, or reviewed manually to verify the generation context before the AI writes the component.
+
 ## Page Conversion (Two-Stage)
 
 For pages with multiple sections (>400 lines or when the task mentions "page"), the AI uses a two-stage pipeline.
@@ -196,9 +212,12 @@ Standards inject automatically into the generation system prompt — no template
 
 ### Built-in Design Standards
 
-UI Forge ships a built-in StackShift UI standard organized as a directory (`references/standards/stackshift-ui/`) with eight focused files — one per concern. Each injects as its own slot and stays well within the 3,000-char per-slot limit, so nothing is compressed or truncated.
+UI Forge ships built-in standards organized as files and directories in `references/standards/`:
 
-The standard covers: import rules, the **`conditionalLink` → `<Button as="link">` rule**, full component props reference, color tokens with CSS variable defaults, typography scale, spacing and rhythm, project setup requirements, and accessibility conventions.
+- **`stackshift-ui/`** — StackShift UI conventions with eight focused files covering import rules, the **`conditionalLink` → `<Button as="link">` rule**, full component props reference, color tokens with CSS variable defaults, typography scale, spacing and rhythm, project setup requirements, and accessibility conventions.
+- **`nextjs-image.md`** — Next.js + Sanity image rendering standard covering the `fill` prop pattern, type-safe `urlFor()` usage, container pattern, `sizes` attribute requirements, and GROQ projection shapes. Applies to any Next.js + Sanity + TypeScript project (not StackShift-specific).
+
+Each injects as its own slot and stays well within the 3,000-char per-slot limit, so nothing is compressed or truncated.
 
 **Directory support (0.2.1+):** Standards can now be a directory. Every `.md` file inside is loaded as its own slot (keyed by filename). This applies to built-in standards, project-local overrides, and explicit `design-arch.json` entries.
 
@@ -391,6 +410,9 @@ Full release notes are in [`change-logs/`](./change-logs/).
 
 | Version | Date | Notes |
 |---------|------|-------|
+| [0.2.7D](./change-logs/0-2-7D-group-f-missing-features.md) | 2026-05-05 | Group F missing features — documented modification/fix mode for rebuild use cases (F-1), added mechanical anti-slop fidelity checklist against reference HTML (F-2), documented +IMAGE fallback requirement for vision-provided screenshots (F-3), created built-in Next.js + Sanity image rendering standard (F-4). |
+| [0.2.7C](./change-logs/0-2-7C-utf8-stdout-encoding-fix.md) | 2026-05-05 | UTF-8 stdout encoding fix — forces UTF-8 on piped stdout on Windows, preventing PowerShell UTF-16 LE redirection from producing garbled output (E-1). |
+| [0.2.7B](./change-logs/0-2-7B-forge-notes-placement-spec-fix.md) | 2026-05-05 | FORGE NOTES placement spec fix — resolves latent conflict between main "Begin with // FORGE NOTES" instruction and body-only mode's "after last import" rule (D-1). Documentation-only fix; runtime behavior was already correct. |
 | [0.2.7](./change-logs/0-2-7-stackshift-theme-discoverability.md) | 2026-05-05 | StackShift integration fixes — `stackshift` added to all CLI help text (G-1); `--theme stackshift` now forces `isStackShift: true` so stackshift-ui standards are never skipped (G-2); `scan.js` creates `design/standards/` and records the built-in stackshift-ui path in `designStandards` (G-3); `install` wires `variant-router` into `design-arch.json` when stackshift-core is present (G-4) |
 | [0.2.6](./change-logs/0-2-6-validate-input-standalone-fix.md) | 2026-05-05 | `--validate-input` standalone fix — no longer requires `--task`; bypasses help block, emits targeted errors, exits 0 on pass (resolves A-1) |
 | [0.2.5](./change-logs/0-2-5-reference-based-design-authority.md) | 2026-05-05 | Reference-based Design Authority — both lite and non-lite modes now output path references instead of copying tailwind theme/CSS content inline; standards listed as `[REF] key [path]: description` load-on-demand refs; non-lite adds explicit IMPLEMENTATION and ANTI-SLOP GUARDRAILS sections (resolves H-1 and H-2) |

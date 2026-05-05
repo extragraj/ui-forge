@@ -197,6 +197,8 @@ Components must always begin with `// FORGE NOTES`:
 // Conflicts: [divergences and judgment calls]
 ```
 
+> **Body-only mode exception:** In `--mode body-only`, `// FORGE NOTES` is placed immediately after the last import statement (or at file top if no imports), not at the absolute top of the file. This preserves existing import statements in the stub file.
+
 Code format — raw TSX, no markdown fences:
 - Single file: code directly after FORGE NOTES
 - Multiple files: `// --- FILE: path/to/file.tsx` separator

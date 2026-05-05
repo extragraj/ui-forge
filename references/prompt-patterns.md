@@ -21,6 +21,22 @@ Template variables in wrappers:
 
 Base block for all section/component generation. Always loaded.
 
+> **Body-only mode override:** In `--mode body-only`, `// FORGE NOTES` is placed immediately after the last import statement (or at file top if no imports). This overrides the "Begin with // FORGE NOTES" instruction below. See `buildVariantContext()` in `invoke.js` for the runtime implementation.
+>
+> **Modification / Fix Mode:** When the task is a fix, rebuild, or modification of an existing component (not a new creation), use `--mode body-only` with the existing component file as `--output` and the reference HTML as `--refs`. This preserves existing imports, exports, and prop shapes while replacing only the function body. Postcondition validation and FORGE NOTES are required in both modes — do not skip them in fix/rebuild mode. The `+CONFIG` modifier, `CONVERT_VARIANT` signal enforcement, anti-slop checks, and postcondition validator all apply in body-only mode.
+>
+> | Aspect | Full mode | Body-only (fix/rebuild) mode |
+> |--------|-----------|------------------------------|
+> | Use case | New component creation | Fix, rebuild, or modify existing component |
+> | `--output` | New file path | Path to existing file |
+> | Imports | Generated from scratch | Preserved from existing file |
+> | Exports | Written fresh | Preserved from existing file |
+> | FORGE NOTES | At file top | After last import statement |
+> | `+CONFIG` modifier | Applies | Applies |
+> | Anti-slop checks | Applies | Applies |
+> | Postcondition validation | Required | Required |
+> | `--refs` | Reference HTML/TSX | Reference HTML/TSX (required for fidelity check) |
+
 **System Addendum:**
 ```
 You are converting a reference into a typed Next.js TSX component.
@@ -50,6 +66,14 @@ Avoid generic AI-generated "template" aesthetics. Must feel hand-crafted for thi
   - No decorative 3-column "Feature" grids unless the reference has them.
   - Match the reference's visual density; do not add padding or whitespace that wasn't there.
 If the reference is minimal, the output must also be minimal.
+
+ANTI-SLOP FIDELITY CHECK (required before writing output when an HTML ref is present):
+- [ ] Extract padding/margin values from ref CSS. Apply exact Tailwind equivalents.
+- [ ] Confirm background: dark (bg-foreground) vs light (bg-background).
+- [ ] Confirm decorative elements: patterns, watermarks, gradient overlays present or absent.
+- [ ] Confirm icon container: size, background, border-radius per ref.
+- [ ] Confirm button/CTA style: underline, filled, outlined per ref.
+Report each finding in FORGE NOTES before writing TSX.
 ```
 
 **Task Wrapper:**
@@ -97,6 +121,8 @@ CONFIG SIGNAL — a data shape file is attached.
 
 Addendum-only. Appended after `CONVERT_SECTION` addendum when an image is attached.
 
+> **Important:** `+IMAGE` is only triggered when an image is passed via `--refs path/to/screenshot.png`. Screenshots provided to the AI via system context (e.g., pasted into the chat, not as a `--refs` path) will NOT trigger the `+IMAGE` modifier. To ensure the modifier fires, always pass images explicitly via `--refs`. If the AI has already received a screenshot through vision context, re-invoke with `--refs path/to/screenshot.png` to activate the full `+IMAGE` signal addendum.
+
 **System Addendum:**
 ```
 IMAGE SIGNAL — a visual reference image is attached.
@@ -123,6 +149,8 @@ CONTRACT COMPLIANCE (REQUIRED tier — violations break the handoff):
   - Destructure every prop. Use `?? undefined` for optional props (never `?? null`, never default objects).
   - Render `null` when required props are absent (compatibility with Variant Router protocol).
   - Do NOT write any `export` other than the default component export.
+    PAIRED mode exception: when `PAIRED: stackshift` appears in the context header, add
+    `export { ComponentName }` after the default export — required by the Variant Router.
   - Do NOT write or modify index.tsx, section schemas, types files, or query files.
   - Honor the contract version declared in the props file (/** @contract-version x.y.z */).
     Absence is treated as 1.0.0. If you see a version you do not recognise, note it in FORGE NOTES
@@ -143,7 +171,7 @@ Begin your response with // FORGE NOTES. The notes MUST include a CONTRACT sub-b
   //     - <propName>: <how it is consumed — destructured, rendered, passed to child>
   //     - ...
   //   fallback rule verified: null when <required-prop> is absent
-  //   exports: default only (contract invariant satisfied)
+  //   exports: default only — OR — default + named (when PAIRED: stackshift is active)
   //
   // Token mappings: ...
   // Divergences: ...
@@ -171,6 +199,8 @@ POST-GENERATION (optional but recommended)
 After writing the file, the caller may run:
   node .claude/skills/ui-forge/scripts/validate-contract.js <output-file> <contract-file>
 The script reports contract violations (extra exports, missing destructures, missing null fallback).
+In StackShift paired mode, the validator auto-detects `.stackshift/installed.json` and permits
+the Variant Router named export — no flag needed.
 ```
 
 ---

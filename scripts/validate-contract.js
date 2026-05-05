@@ -25,7 +25,9 @@
  */
 
 import { readFileSync, existsSync } from 'fs'
-import { resolve } from 'path'
+import { resolve, join } from 'path'
+
+const STACKSHIFT_MARKER = join(process.cwd(), '.stackshift', 'installed.json')
 
 const [, , outputArg, contractArg] = process.argv
 
@@ -113,21 +115,33 @@ function parseRequiredProps(src, interfaceName) {
 
 // ─── Parse output ────────────────────────────────────────────────────────────
 
+function getDefaultExportName(src) {
+  return (
+    src.match(/export\s+default\s+function\s+(\w+)/)?.[1] ??
+    src.match(/export\s+default\s+(\w+)/)?.[1] ??
+    null
+  )
+}
+
 function countDefaultExports(src) {
   const matches = src.match(/export\s+default\b/g)
   return matches ? matches.length : 0
 }
 
-function findDisallowedNamedExports(src, contractInterfaceName) {
-  // Allowed: no named exports at all (the contract is imported, not re-exported)
-  // Collect every `export { ... }` and `export const/function/class/interface/type Name`
+function findDisallowedNamedExports(src, contractInterfaceName, pairedDefaultName) {
+  // Allowed: no named exports at all (the contract is imported, not re-exported).
+  // Paired-mode exception: one `export { ComponentName }` matching the default export is
+  // required by the StackShift Variant Router — permit it when pairedDefaultName is set.
   const violations = []
 
   const namedBlockRe = /export\s*\{([^}]+)\}/g
   let bm
   while ((bm = namedBlockRe.exec(src)) !== null) {
     const names = bm[1].split(',').map(s => s.trim().split(/\s+as\s+/)[0]).filter(Boolean)
-    for (const n of names) violations.push(`export { ${n} }`)
+    for (const n of names) {
+      if (pairedDefaultName && n === pairedDefaultName) continue
+      violations.push(`export { ${n} }`)
+    }
   }
 
   const namedDeclRe = /export\s+(?:const|let|var|function|class|interface|type|enum)\s+(\w+)/g
@@ -178,6 +192,10 @@ const interfaceName = parseInterfaceName(contract)
 const contractVersion = parseContractVersion(contract)
 const { required, optional } = parseRequiredProps(contract, interfaceName)
 
+// Auto-detect StackShift paired mode — permit the Variant Router named export
+const isStackShiftPaired = existsSync(STACKSHIFT_MARKER)
+const pairedDefaultName = isStackShiftPaired ? getDefaultExportName(output) : null
+
 const violations = []
 const warnings = []
 
@@ -185,7 +203,7 @@ const defaultCount = countDefaultExports(output)
 if (defaultCount === 0) violations.push('No default export found')
 if (defaultCount > 1) violations.push(`Multiple default exports found (${defaultCount})`)
 
-const namedExports = findDisallowedNamedExports(output, interfaceName)
+const namedExports = findDisallowedNamedExports(output, interfaceName, pairedDefaultName)
 if (namedExports.length)
   violations.push(`Disallowed named exports: ${namedExports.join(', ')}`)
 
@@ -213,6 +231,7 @@ report.push(`  interface: ${interfaceName ?? '<unparsed>'}`)
 report.push(`  version:   ${contractVersion}`)
 report.push(`  required:  ${required.length ? required.join(', ') : '(none)'}`)
 report.push(`  optional:  ${optional.length ? optional.join(', ') : '(none)'}`)
+if (isStackShiftPaired) report.push(`  paired:    stackshift (named export "${pairedDefaultName ?? '?'}" permitted)`)
 
 if (violations.length) {
   report.push('')

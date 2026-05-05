@@ -103,7 +103,7 @@ const warnings = []
 let meta = {}
 
 if (validateFn) {
-  const result = validateFn(output, contract)
+  const result = validateFn(output, contract, { pairedMode: !!paired })
   violations.push(...result.violations)
   warnings.push(...result.warnings)
   meta = result.meta
@@ -142,11 +142,21 @@ if (validateFn) {
   if (!defCount) violations.push('No default export found')
   if (defCount > 1) violations.push(`Multiple default exports (${defCount})`)
 
+  // Paired-mode exception: permit one named export matching the default export name
+  const pairedDefaultName = paired
+    ? (output.match(/export\s+default\s+function\s+(\w+)/)?.[1]
+      ?? output.match(/export\s+default\s+(\w+)/)?.[1]
+      ?? null)
+    : null
+
   const namedExports = []
   let bm; const nbRe = /export\s*\{([^}]+)\}/g
   while ((bm = nbRe.exec(output)) !== null)
     bm[1].split(',').map(s => s.trim().split(/\s+as\s+/)[0]).filter(Boolean)
-      .forEach(n => namedExports.push(`export { ${n} }`))
+      .forEach(n => {
+        if (pairedDefaultName && n === pairedDefaultName) return
+        namedExports.push(`export { ${n} }`)
+      })
   let dm; const ndRe = /export\s+(?:const|let|var|function|class|interface|type|enum)\s+(\w+)/g
   while ((dm = ndRe.exec(output)) !== null) {
     if (dm[1] === ifaceName && /export\s+(?:interface|type)/.test(dm[0]))
