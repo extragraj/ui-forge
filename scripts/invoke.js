@@ -573,7 +573,7 @@ function isInterfaceFile(ref) {
 }
 
 function detectSignals(task, classifiedRefs, explicitSignal, opts = {}) {
-  const t = task.toLowerCase()
+  const t = (task ?? '').toLowerCase()
   const byRole = classifiedRefs.reduce((acc, r) => {
     ;(acc[r.role] ??= []).push(r)
     return acc
@@ -1036,7 +1036,7 @@ function main() {
     }
   }
 
-  if (!params.task) {
+  if (!params.task && !params['validate-input']) {
     process.stderr.write(`
 ui-forge — Next.js component generator for Claude Code
 
@@ -1082,6 +1082,11 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
   const verifyMode = params.verify === true
   const validateInput = params['validate-input'] === true
   const isLite = params.lite === true
+
+  if (validateInput && !params.task && !params.refs) {
+    process.stderr.write('ui-forge error: --validate-input requires --refs <interface-file> (and optionally --signal CONVERT_VARIANT)\n')
+    process.exit(1)
+  }
 
   if (params.rescan) {
     process.stderr.write('ui-forge: re-scanning project...\n')
@@ -1147,6 +1152,7 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
       process.exit(1)
     }
     process.stderr.write(`ui-forge: input validation passed — interface: ${ifaceNameCheck} (${contractRef.path})\n`)
+    if (!params.task) process.exit(0)
   }
 
   if (paired)

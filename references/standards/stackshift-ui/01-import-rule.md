@@ -8,7 +8,8 @@ All UI primitives, layout components, and section-level building blocks MUST com
 import { Button } from "@stackshift-ui/button";
 import { Container } from "@stackshift-ui/container";
 import { Flex } from "@stackshift-ui/flex";
-import { Grid, GridItem } from "@stackshift-ui/grid";
+import { Grid } from "@stackshift-ui/grid";
+import { GridItem } from "@stackshift-ui/grid-item";
 import { Heading } from "@stackshift-ui/heading";
 import { Image } from "@stackshift-ui/image";
 import { Section } from "@stackshift-ui/section";
