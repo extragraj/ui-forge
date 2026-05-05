@@ -22,8 +22,11 @@ The canonical version lives in `skill.version` (plain text, one line, semver). T
 ## Commands
 
 ```bash
-# Post-install: wire slash commands + Bash permissions into .claude/ (run once after npx skills add)
-node scripts/cli.js install
+# Post-install: wire slash commands + Bash permissions (run once from target project root after npx skills add)
+# sh / bash — auto-detects install platform:
+for d in .claude .agents .github .cursor .codex .copilot; do [ -f "$d/skills/ui-forge/scripts/cli.js" ] && node "$d/skills/ui-forge/scripts/cli.js" install && break; done
+# PowerShell / Windows:
+# @('.claude','.agents','.github','.cursor','.codex','.copilot') | % {"$_\skills\ui-forge\scripts\cli.js"} | ? {Test-Path $_} | select -f 1 | % { node $_ install }
 
 # CLI proxy — all commands below are also available via cli.js <command> [args...]
 node scripts/cli.js scan --quick

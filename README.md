@@ -4,7 +4,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org)
 [![Skills Compatible](https://img.shields.io/badge/skills-compatible-blue)](https://github.com/vercel/skills-cli)
 
-> **Version** 0.2.3
+> **Version** 0.2.4
 
 Next.js component generator for Codex CLI, Claude Code, and other AI coding assistants. Converts HTML, TSX, images, and JSON reference materials into production-ready components that match your project's existing design system — using your actual component libraries, Tailwind tokens, and coding conventions.
 
@@ -29,11 +29,21 @@ npx skills add extragraj/ui-forge -y -g -a claude-code
 npx skills add extragraj/ui-forge -y -g -a codex -a claude-code
 ```
 
-Then run once to wire slash commands and Bash permissions into your project:
+Then wire slash commands and Bash permissions into your project — run once from your project root:
 
-```bash
-node .claude/skills/ui-forge/scripts/cli.js install
+**sh / bash (macOS · Linux · WSL):**
+```sh
+for d in .claude .agents .github .cursor .codex .copilot; do
+  [ -f "$d/skills/ui-forge/scripts/cli.js" ] && node "$d/skills/ui-forge/scripts/cli.js" install && break
+done
 ```
+
+**PowerShell (Windows):**
+```powershell
+@('.claude','.agents','.github','.cursor','.codex','.copilot') | % { "$_\skills\ui-forge\scripts\cli.js" } | ? { Test-Path $_ } | select -f 1 | % { node $_ install }
+```
+
+`cli.js install` auto-detects which agentic platform the skill was installed into and writes slash commands and permissions to that platform's directory (`.claude/`, `.agents/`, `.cursor/`, etc.). Re-run any time you switch platforms or reinstall.
 
 | Flag | Description |
 |------|-------------|
@@ -45,7 +55,7 @@ node .claude/skills/ui-forge/scripts/cli.js install
 ## How It Works
 
 1. **Install the skill** — the Skills CLI registers UI Forge with your agent (see [Installation](#installation) below).
-2. **Scan once** — run `/forge-scan` (CLI Command) or `node "$SKILL_ROOT/scripts/cli.js" scan` (any Terminal that support Node) to create `design/design-arch.json`. Re-run when you add libraries or update your Tailwind theme.
+2. **Scan once** — run `/forge-scan` (Claude Code) or `node <skill-root>/scripts/cli.js scan` (any terminal with Node) to create `design/design-arch.json`. Re-run when you add libraries or update your Tailwind theme.
 3. **Ask your AI assistant** — describe what you want to build. The skill activates automatically, `invoke.js` prepares structured generation context, and your AI assistant generates the component in its own session.
 
 `invoke.js` is a context-preparation script — it never calls an AI API. Your coding assistant reads its output and does the generation.
@@ -65,16 +75,25 @@ For other CLI/agents that does not support slash commands, use `cli.js` directly
 
 `cli.js` is the entry point for any non-Claude Code environment. It proxies all commands through to the right script with full argument pass-through.
 
-Resolve `SKILL_ROOT` first (the path depends on where your agent installed the skill):
+Resolve `SKILL_ROOT` first using `detect.sh` (sh/bash) or `detect.js` (Node.js / Windows):
 
 ```bash
-SKILL_ROOT="$(sh scripts/detect.sh)"   # auto-detects install location across agents
+# sh / bash — from your project root, point at the known install location:
+SKILL_ROOT="$(sh .claude/skills/ui-forge/scripts/detect.sh)"
+
+# Or use detect.js (works on Windows and any Node environment):
+SKILL_ROOT="$(node .claude/skills/ui-forge/scripts/detect.js)"
+
+# Auto-discover across all platforms (sh / bash):
+for d in .claude .agents .github .cursor .codex .copilot; do
+  [ -f "$d/skills/ui-forge/scripts/detect.sh" ] && SKILL_ROOT="$(sh "$d/skills/ui-forge/scripts/detect.sh")" && break
+done
 ```
 
 Then run any command:
 
 ```bash
-node "$SKILL_ROOT/scripts/cli.js" install   # wire slash commands + permissions
+node "$SKILL_ROOT/scripts/cli.js" install   # wire slash commands + permissions (auto-detects platform)
 node "$SKILL_ROOT/scripts/cli.js" scan --quick
 node "$SKILL_ROOT/scripts/cli.js" scan --theme shadcn
 node "$SKILL_ROOT/scripts/cli.js" forge --task "Convert hero" --refs ./hero.html --output ./Hero.tsx
@@ -367,6 +386,7 @@ Full release notes are in [`change-logs/`](./change-logs/).
 
 | Version | Date | Notes |
 |---------|------|-------|
+| [0.2.4](./change-logs/0-2-4-platform-aware-install.md) | 2026-05-05 | Platform-aware install — `cli.js install` auto-detects which agentic platform the skill is in (Claude Code, Codex, Copilot, Cursor, Gemini) and writes slash commands + permissions to that platform's directory; new `scripts/detect.js` (Node.js, Windows-compatible) mirrors `detect.sh`; `detect.sh` now covers all 8 supported platforms; README and CLAUDE.md updated with cross-platform one-liner bootstrap commands (resolves I-1 and I-2) |
 | [0.2.3](./change-logs/0-2-3-windows-synthesis-fix.md) | 2026-05-01 | Windows synthesis fix — prompt passed via stdin to avoid CMD.exe special-char mangling; `SYNTHESIS_PROMPT` redesigned to pass file paths (Claude reads them with its Read tool) instead of embedding raw CSS/JS content, cutting prompt size ~69% and enabling component-level pattern detection; StackShift `.forgeignore` auto-created on `install`; Haiku model documented in SKILL.md |
 | [0.2.2B](./change-logs/0-2-2B-theme-and-preview-fixes.md) | 2026-04-30 | Added missing `mantine` and `plain-tailwind` theme presets; `--preview` confirmation moved to stdout (was stderr, invisible in Claude Code slash command output) |
 | [0.2.2A](./change-logs/0-2-2A-token-efficiency-and-lite-optimization.md) | 2026-04-30 | Token Optimization: Introduced `--lite` mode (~90% context reduction), context-aware standards filtering, and fixed CLI-vs-Config precedence logic |

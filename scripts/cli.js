@@ -24,12 +24,38 @@ function proxy(script) {
   process.exit(result.status ?? 1);
 }
 
+// Known agentic platform path segments → [relative-skill-path, platform-dir-key]
+const PLATFORM_MAP = [
+  ['.claude/skills/ui-forge',                '.claude'],
+  ['.agents/skills/ui-forge',                '.agents'],
+  ['.github/skills/ui-forge',                '.github'],
+  ['.cursor/skills/ui-forge',                '.cursor'],
+  ['.codex/skills/ui-forge',                 '.codex'],
+  ['.copilot/skills/ui-forge',               '.copilot'],
+  ['.agentic/skills/ui-forge',               '.agentic'],
+  ['.gemini/antigravity/skills/ui-forge',    '.gemini/antigravity'],
+];
+
+function resolvePlatform(cwd) {
+  const skillNorm = SKILL_ROOT.replace(/\\/g, '/');
+  for (const [relSkill, platformKey] of PLATFORM_MAP) {
+    if (!skillNorm.includes('/' + relSkill)) continue;
+    return {
+      platformDir: join(cwd, ...platformKey.split('/')),
+      relSkill,
+    };
+  }
+  // Fallback: global install or unknown layout — default to .claude in cwd
+  return { platformDir: join(cwd, '.claude'), relSkill: '.claude/skills/ui-forge' };
+}
+
 function install() {
   const cwd = process.cwd();
-  const dotClaude = join(cwd, '.claude');
-  const commandsDir = join(dotClaude, 'commands');
-  const settingsPath = join(dotClaude, 'settings.json');
-  const PERM = 'Bash(node .claude/skills/ui-forge/scripts/*)';
+  const { platformDir, relSkill } = resolvePlatform(cwd);
+  const commandsDir = join(platformDir, 'commands');
+  const settingsPath = join(platformDir, 'settings.json');
+  const PERM = 'Bash(node ' + relSkill + '/scripts/*)';
+  const run = (script) => '!`node ' + relSkill + '/scripts/' + script + ' $ARGUMENTS`';
 
   mkdirSync(commandsDir, { recursive: true });
 
@@ -38,25 +64,25 @@ function install() {
       file: 'forge-scan.md',
       description: 'Scan the project and create design/design-arch.json',
       hint: '[--theme shadcn|mantine|plain-tailwind] [--schema-v4] [--quick]',
-      body: 'Run the UI Forge project scanner.\n\n!`node .claude/skills/ui-forge/scripts/scan.js $ARGUMENTS`',
+      body: 'Run the UI Forge project scanner.\n\n' + run('scan.js'),
     },
     {
       file: 'forge.md',
       description: 'Generate a component using UI Forge',
       hint: '--task "<task>" --refs <path[,path]> --output <path>',
-      body: 'Run UI Forge context preparation. Read the printed context block and generate the component(s).\n\n!`node .claude/skills/ui-forge/scripts/invoke.js $ARGUMENTS`',
+      body: 'Run UI Forge context preparation. Read the printed context block and generate the component(s).\n\n' + run('invoke.js'),
     },
     {
       file: 'forge-verify.md',
       description: 'Verify a UI Forge–generated component against its contract',
       hint: '<component.tsx> <contract.ts> [--playwright <url>]',
-      body: '!`node .claude/skills/ui-forge/scripts/verify.js $ARGUMENTS`',
+      body: run('verify.js'),
     },
     {
       file: 'forge-export-design.md',
       description: 'Export project design system as a Claude Design–ingestible bundle',
       hint: '[out-dir]',
-      body: '!`node .claude/skills/ui-forge/scripts/export-design.js $ARGUMENTS`',
+      body: run('export-design.js'),
     },
   ];
 
@@ -109,10 +135,10 @@ UI Forge CLI v${getVersion()}
 
 Usage:
   ui-forge <command> [args...]
-  node .claude/skills/ui-forge/scripts/cli.js <command> [args...]
+  node <skill-root>/scripts/cli.js <command> [args...]
 
 Commands:
-  install          Wire slash commands and Bash permissions into .claude/
+  install          Wire slash commands and Bash permissions into the detected platform dir
   scan   [args]    Scan project → design/design-arch.json
                      --quick              Skip AI synthesis (fast, static only)
                      --theme <name>       Seed from shadcn|mantine|plain-tailwind
