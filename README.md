@@ -4,7 +4,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org)
 [![Skills Compatible](https://img.shields.io/badge/skills-compatible-blue)](https://github.com/vercel/skills-cli)
 
-> **Version** 0.2.4
+> **Version** 0.2.5
 
 Next.js component generator for Codex CLI, Claude Code, and other AI coding assistants. Converts HTML, TSX, images, and JSON reference materials into production-ready components that match your project's existing design system — using your actual component libraries, Tailwind tokens, and coding conventions.
 
@@ -386,6 +386,7 @@ Full release notes are in [`change-logs/`](./change-logs/).
 
 | Version | Date | Notes |
 |---------|------|-------|
+| [0.2.5](./change-logs/0-2-5-reference-based-design-authority.md) | 2026-05-05 | Reference-based Design Authority — both lite and non-lite modes now output path references instead of copying tailwind theme/CSS content inline; standards listed as `[REF] key [path]: description` load-on-demand refs; non-lite adds explicit IMPLEMENTATION and ANTI-SLOP GUARDRAILS sections (resolves H-1 and H-2) |
 | [0.2.4](./change-logs/0-2-4-platform-aware-install.md) | 2026-05-05 | Platform-aware install — `cli.js install` auto-detects which agentic platform the skill is in (Claude Code, Codex, Copilot, Cursor, Gemini) and writes slash commands + permissions to that platform's directory; new `scripts/detect.js` (Node.js, Windows-compatible) mirrors `detect.sh`; `detect.sh` now covers all 8 supported platforms; README and CLAUDE.md updated with cross-platform one-liner bootstrap commands (resolves I-1 and I-2) |
 | [0.2.3](./change-logs/0-2-3-windows-synthesis-fix.md) | 2026-05-01 | Windows synthesis fix — prompt passed via stdin to avoid CMD.exe special-char mangling; `SYNTHESIS_PROMPT` redesigned to pass file paths (Claude reads them with its Read tool) instead of embedding raw CSS/JS content, cutting prompt size ~69% and enabling component-level pattern detection; StackShift `.forgeignore` auto-created on `install`; Haiku model documented in SKILL.md |
 | [0.2.2B](./change-logs/0-2-2B-theme-and-preview-fixes.md) | 2026-04-30 | Added missing `mantine` and `plain-tailwind` theme presets; `--preview` confirmation moved to stdout (was stderr, invisible in Claude Code slash command output) |

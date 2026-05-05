@@ -34,7 +34,7 @@
 import {
   readFileSync, writeFileSync, existsSync, statSync, readdirSync,
 } from 'fs'
-import { join, resolve, extname, basename, dirname } from 'path'
+import { join, resolve, extname, basename, dirname, relative } from 'path'
 import { fileURLToPath } from 'url'
 import { spawnSync } from 'child_process'
 import { createHash } from 'crypto'
@@ -50,6 +50,32 @@ const DIVIDER = '─'.repeat(60)
 const DEFAULT_CONTRACT_VERSION = '1.0.0'
 const SUPPORTED_CONTRACT_VERSIONS = ['1.0.0']
 const BRAND_NAME_RE = /\b(brand|voice|tone)\b/i
+
+// ─── Design file finders ──────────────────────────────────────────────────────
+
+function findTailwindConfigPath() {
+  for (const name of ['tailwind.config.ts', 'tailwind.config.js', 'tailwind.config.mjs', 'tailwind.config.cjs']) {
+    if (existsSync(join(PROJECT_ROOT, name))) return name
+  }
+  return null
+}
+
+function findGlobalCssPath() {
+  for (const p of ['app/globals.css', 'src/app/globals.css', 'styles/globals.css', 'src/styles/globals.css', 'app/global.css']) {
+    if (existsSync(join(PROJECT_ROOT, p))) return p
+  }
+  return null
+}
+
+function extractStandardDescription(content) {
+  const stripped = content.replace(/<!--[\s\S]*?-->/g, '').split('\n')
+  for (const line of stripped) {
+    const t = line.trim()
+    if (!t || t.startsWith('#') || t.startsWith('//') || t.startsWith('---') || t.startsWith('*') && t.length < 3) continue
+    return t.slice(0, 120)
+  }
+  return null
+}
 
 // ─── Preview helpers ──────────────────────────────────────────────────────────
 
@@ -174,8 +200,9 @@ const META_STANDARDS = ['README', 'sample-standard']
 function loadDesignStandards(arch, opts = {}) {
   const standards = {}
   const sources = {}  // key → 'arch' | 'project' | 'built-in'
+  const paths = {}    // key → absolute file path (for [REF] load-on-demand refs)
 
-  // Load a single file or every .md in a directory into standards/sources.
+  // Load a single file or every .md in a directory into standards/sources/paths.
   // Returns without overwriting keys already present when skipExisting=true.
   function loadPath(fullPath, source, skipExisting = false) {
     if (!existsSync(fullPath)) return
@@ -186,10 +213,12 @@ function loadDesignStandards(arch, opts = {}) {
         const slotKey = file.replace(/\.md$/, '')
         if (skipExisting && standards[slotKey]) continue
         if (source === 'built-in' && META_STANDARDS.includes(slotKey)) continue
-        const content = readFileSync(join(fullPath, file), 'utf-8')
+        const filePath = join(fullPath, file)
+        const content = readFileSync(filePath, 'utf-8')
         if (source === 'built-in' && !isSubstantive(content)) continue
         standards[slotKey] = content
         sources[slotKey] = source
+        paths[slotKey] = filePath
       }
     } else {
       const slotKey = basename(fullPath, '.md')
@@ -199,6 +228,7 @@ function loadDesignStandards(arch, opts = {}) {
       if (source === 'built-in' && !isSubstantive(content)) return
       standards[slotKey] = content
       sources[slotKey] = source
+      paths[slotKey] = fullPath
     }
   }
 
@@ -217,6 +247,7 @@ function loadDesignStandards(arch, opts = {}) {
     } else {
       standards[key] = readFileSync(fullPath, 'utf-8')
       sources[key] = 'arch'
+      paths[key] = fullPath
     }
   }
 
@@ -233,6 +264,7 @@ function loadDesignStandards(arch, opts = {}) {
         if (!standards[slotKey]) {
           standards[slotKey] = readFileSync(entryPath, 'utf-8')
           sources[slotKey] = 'project'
+          paths[slotKey] = entryPath
         }
       }
     }
@@ -244,7 +276,7 @@ function loadDesignStandards(arch, opts = {}) {
     for (const entry of readdirSync(BUILTIN_STANDARDS_DIR).sort()) {
       const entryPath = join(BUILTIN_STANDARDS_DIR, entry)
       const st = statSync(entryPath)
-      
+
       // Auto-filter stackshift-ui if arch is NOT stackshift
       if (entry === 'stackshift-ui' && !arch.isStackShift) continue
 
@@ -258,12 +290,13 @@ function loadDesignStandards(arch, opts = {}) {
         if (!isSubstantive(content)) continue
         standards[slotKey] = content
         sources[slotKey] = 'built-in'
+        paths[slotKey] = entryPath
       }
     }
   }
 
   if (Object.keys(standards).length === 0) return null
-  return { standards, sources }
+  return { standards, sources, paths }
 }
 
 // A standards file is "substantive" if, after stripping comments and blanks,
@@ -282,40 +315,51 @@ function isSubstantive(md) {
 let _archContextCache = null
 let _archContextKey = null
 function archToContext(arch, isLite = false) {
-  // Cache keyed by _scanned timestamp
+  // Cache keyed by _scanned timestamp + mode
   const key = (arch._scanned ?? '') + (isLite ? ':lite' : '')
   if (_archContextKey === key && _archContextCache !== null) return _archContextCache
   const lines = []
-  
-  if (isLite) {
-    if (arch.componentLib?.length) lines.push(`lib: ${arch.componentLib.join(',')}`)
-    if (arch.usedLibraries?.length) lines.push(`deps: ${arch.usedLibraries.map(l => l.name).join(',')}`)
-    if (arch.tailwind?.colorTokens) lines.push(`tokens: ${arch.tailwind.colorTokens.split(',').map(s => s.trim()).slice(0,10).join(',')}...`)
-    if (arch.patterns?.spacing) lines.push(`spacing: ${arch.patterns.spacing}`)
-    if (arch.patterns?.typography) lines.push(`typography: ${arch.patterns.typography}`)
-  } else {
-    if (arch.componentLib?.length)
-      lines.push(`componentLib: ${arch.componentLib.join(', ')}`)
-    if (arch.usedComponents?.length)
-      lines.push(`usedComponents: ${arch.usedComponents.slice(0, 25).join(', ')}`)
-    if (arch.usedLibraries?.length)
-      lines.push(`usedLibraries: ${arch.usedLibraries.map(l => l.name).join(', ')}`)
-    if (arch.tailwind?.colorTokens)
-      lines.push(`colorTokens: ${arch.tailwind.colorTokens}`)
-    if (arch.tailwind?.darkColorTokens)
-      lines.push(`darkColorTokens: ${arch.tailwind.darkColorTokens}`)
-    if (arch.tailwind?.themeSection)
-      lines.push(`tailwind.theme:\n${arch.tailwind.themeSection.slice(0, 500)}`)
-    if (arch.globalCss) {
-      const css = arch.globalCss.trim()
-      if (!css.split('\n').every(l => /^\s*(@tailwind|\/\*|\*\/?|$)/.test(l)))
-        lines.push(`globalCss:\n${css.slice(0, 300)}`)
-    }
-    if (arch.patterns?.spacing)    lines.push(`spacing: ${arch.patterns.spacing}`)
-    if (arch.patterns?.typography) lines.push(`typography: ${arch.patterns.typography}`)
-    if (arch.patterns?.conventions?.length)
-      lines.push(`conventions:\n${arch.patterns.conventions.map(c => '- ' + c).join('\n')}`)
+
+  // Both modes: reference-based format — AI reads design-arch.json for full detail
+  if (arch.componentLib?.length)
+    lines.push(`  componentLib: ${arch.componentLib.join(', ')}`)
+
+  if (arch.tailwind?.colorTokens) {
+    // Token names only — values are in design-arch.json
+    const names = arch.tailwind.colorTokens.split(',').map(s => s.trim().split(/\s+/)[0]).filter(Boolean)
+    lines.push(`  tokens: ${names.join(', ')}`)
   }
+  if (arch.tailwind?.darkColorTokens) {
+    const names = arch.tailwind.darkColorTokens.split(',').map(s => s.trim().split(/\s+/)[0]).filter(Boolean)
+    if (names.length) lines.push(`  darkTokens: ${names.join(', ')}`)
+  }
+
+  const tailwindPath = findTailwindConfigPath()
+  if (tailwindPath) lines.push(`  tailwind: ${tailwindPath}`)
+
+  const globalCssPath = findGlobalCssPath()
+  if (globalCssPath) lines.push(`  globalCss: ${globalCssPath}`)
+
+  if (arch.patterns?.spacing) {
+    // Lite: first sentence only; non-lite: full summary
+    const spacing = isLite ? arch.patterns.spacing.split(/\.\s+/)[0] : arch.patterns.spacing
+    lines.push(`  spacing: ${spacing}`)
+  }
+  if (arch.patterns?.typography) {
+    const typography = isLite ? arch.patterns.typography.split(/\.\s+/)[0] : arch.patterns.typography
+    lines.push(`  typography: ${typography}`)
+  }
+
+  // Non-lite only: component/library inventory and conventions
+  if (!isLite) {
+    if (arch.usedComponents?.length)
+      lines.push(`  usedComponents: ${arch.usedComponents.slice(0, 25).join(', ')}`)
+    if (arch.usedLibraries?.length)
+      lines.push(`  usedLibraries: ${arch.usedLibraries.map(l => l.name).join(', ')}`)
+    if (arch.patterns?.conventions?.length)
+      lines.push(`  conventions:\n${arch.patterns.conventions.map(c => '  - ' + c).join('\n')}`)
+  }
+
   _archContextCache = lines.join('\n')
   _archContextKey = key
   return _archContextCache
@@ -632,19 +676,22 @@ function loadComposedAddendum(signals, isLite = false) {
 
 function appendStandards(lines, standardsResult, isLite = false) {
   if (!standardsResult) return
-  const { standards, sources } = standardsResult
+  const { standards, paths } = standardsResult
+  const keys = Object.keys(standards)
+  if (keys.length === 0) return
+
+  lines.push('')
+  lines.push('DESIGN STANDARDS (load as needed)')
   for (const [key, content] of Object.entries(standards)) {
-    const source = sources?.[key] ?? 'arch'
-    if (isLite) {
-      lines.push(`// [REF] STANDARD: ${key} (Source: ${source})`)
-      continue
-    }
-    if (content.length > 3000)
-      process.stderr.write(`ui-forge: Warning — design standard "${key}" truncated to 3000 chars (${content.length} total). Consider splitting into focused sections.\n`)
-    lines.push('')
-    lines.push(`// --- STANDARD: ${key} ---`)
-    lines.push(`# source: ${source}`)
-    lines.push(content.slice(0, 3000))
+    const filePath = paths?.[key]
+    const relPath = filePath
+      ? relative(PROJECT_ROOT, filePath).replace(/\\/g, '/')
+      : null
+    const desc = extractStandardDescription(content)
+    let ref = key
+    if (relPath) ref += ` [${relPath}]`
+    if (desc) ref += `: ${desc}`
+    lines.push(`// [REF] ${ref}`)
   }
 }
 
@@ -667,7 +714,7 @@ function buildSectionContext({ task, archCtx, signals, standards, addendum, outp
   lines.push('TASK')
   lines.push(task)
   lines.push('')
-  lines.push('DESIGN AUTHORITY')
+  lines.push('DESIGN AUTHORITY: design/design-arch.json')
   lines.push(archCtx)
   appendStandards(lines, standards, signals.isLite)
 
@@ -707,6 +754,22 @@ function buildSectionContext({ task, archCtx, signals, standards, addendum, outp
     lines.push('')
     lines.push(`EXISTING COMPONENT [${diffSource.path}] — base; preserve what the task does not ask to change`)
     lines.push(diffSource.content)
+  }
+
+  if (!signals.isLite) {
+    lines.push('')
+    lines.push('IMPLEMENTATION')
+    lines.push('1. Identify the primary layout pattern from REFERENCE')
+    lines.push('2. Map reference CSS classes/values to design-arch.json tokens')
+    lines.push('3. Check DESIGN STANDARDS relevant to components used')
+    lines.push('4. Write FORGE NOTES then generate TSX')
+    lines.push('')
+    lines.push('ANTI-SLOP GUARDRAILS')
+    lines.push('- No default hero gradients unless reference explicitly shows them')
+    lines.push('- No rainbow headings — single-color or design-arch tokens only')
+    lines.push('- Padding/spacing must match reference CSS values — do not default to py-20')
+    lines.push('- Background: confirm dark vs light from reference — do not assume dark')
+    lines.push('- No filler CTAs or Lorem ipsum — reproduce content from reference exactly')
   }
 
   lines.push('')
@@ -770,7 +833,7 @@ function buildVariantContext({ task, archCtx, signals, standards, addendum, outp
   }
 
   lines.push('')
-  lines.push('DESIGN AUTHORITY')
+  lines.push('DESIGN AUTHORITY: design/design-arch.json')
   lines.push(archCtx)
 
   if (configRef) {
@@ -831,7 +894,7 @@ function buildPageStage1Context({ task, mainRef, archCtx }) {
   lines.push('TASK')
   lines.push(task)
   lines.push('')
-  lines.push('DESIGN AUTHORITY (for existingProjectSection detection)')
+  lines.push('DESIGN AUTHORITY: design/design-arch.json (for existingProjectSection detection)')
   lines.push(archCtx)
   lines.push('')
   lines.push('PAGE CONTENT')
@@ -871,10 +934,25 @@ function buildPageStage2Context({ archCtx, signals, standards, addendum, plan, m
   lines.push('=== UI FORGE — PAGE GENERATION (Stage 2) ===')
   lines.push(`${todo.length} section(s) to generate${skipped ? `, ${skipped} skipped (existingProjectSection: true)` : ''}`)
   lines.push('')
-  lines.push('DESIGN AUTHORITY')
+  lines.push('DESIGN AUTHORITY: design/design-arch.json')
   lines.push(archCtx)
   appendStandards(lines, standards, isLite)
   lines.push('')
+  if (!isLite) {
+    lines.push('IMPLEMENTATION')
+    lines.push('1. Identify the primary layout pattern from each REFERENCE excerpt')
+    lines.push('2. Map reference CSS classes/values to design-arch.json tokens')
+    lines.push('3. Check DESIGN STANDARDS relevant to components used')
+    lines.push('4. Write FORGE NOTES then generate TSX for each section')
+    lines.push('')
+    lines.push('ANTI-SLOP GUARDRAILS')
+    lines.push('- No default hero gradients unless reference explicitly shows them')
+    lines.push('- No rainbow headings — single-color or design-arch tokens only')
+    lines.push('- Padding/spacing must match reference CSS values — do not default to py-20')
+    lines.push('- Background: confirm dark vs light from reference — do not assume dark')
+    lines.push('- No filler CTAs or Lorem ipsum — reproduce content from reference exactly')
+    lines.push('')
+  }
   lines.push('GENERATION INSTRUCTIONS')
   lines.push(addendum)
   lines.push('Generate each section below in order. Write each to the specified file.')

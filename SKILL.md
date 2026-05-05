@@ -1,6 +1,6 @@
 ---
 name: ui-forge
-version: 0.2.4
+version: 0.2.5
 description: 'Production Next.js component generator. Converts HTML, TSX, images, and JSON into project-compliant components using your design system. Triggers on component creation, HTML/TSX conversion, page generation, image-to-component tasks, or any frontend code generation request. Requires a one-time scan to build design/design-arch.json.'
 ---
 

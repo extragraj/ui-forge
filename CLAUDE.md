@@ -160,7 +160,11 @@ All slash commands route through `$CLAUDE_PLUGIN_ROOT` and pass `$ARGUMENTS` thr
 | `=== UI FORGE — PAGE DECOMPOSITION (Stage 1) ===` | `CONVERT_PAGE`, no plan file yet |
 | `=== UI FORGE — PAGE GENERATION (Stage 2) ===` | `CONVERT_PAGE`, plan file exists |
 
-All outputs contain: task, design authority, pre-processed refs, generation instructions, and write target.
+All outputs contain: task, design authority (path references), pre-processed refs, generation instructions, and write target.
+
+`CONVERT_SECTION` and `CONVERT_PAGE` Stage 2 in non-lite mode additionally include an **IMPLEMENTATION** section (step-by-step generation order) and an **ANTI-SLOP GUARDRAILS** section (explicit fidelity checklist) between the refs and GENERATION INSTRUCTIONS. These are omitted in `--lite` mode.
+
+The **DESIGN AUTHORITY** block uses a reference-based format in both lite and non-lite modes — token names, file paths to `tailwind.config.*` and `globals.css`, and one-line summaries for spacing/typography. Full values are in `design/design-arch.json` which the AI reads on demand. **DESIGN STANDARDS** are listed as `// [REF] key [path]: description` load-on-demand references rather than injected inline.
 
 ### Prompt composition
 
