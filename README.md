@@ -10,17 +10,15 @@ Next.js component generator for Codex CLI, Claude Code, and other AI coding assi
 
 ## What is UI Forge?
 
-UI Forge is an agentic code skill. When you ask your AI coding assistant to convert a component or generate from a reference, the skill activates, scans your project's design system, and prepares a structured generation context — your AI reads that context and writes the component using its own session. No separate API key or AI call is needed from the skill itself.
+UI Forge is an agentic code skill that scans your project's design system and prepares a structured generation context for your AI assistant. When you ask to convert a component or generate from a reference, it reads component libraries, Tailwind tokens, design standards, and conventions from `design/design-arch.json`, then injects everything into the context so your AI can write the component using its own session.
 
-It understands your project before generating anything: component libraries, Tailwind tokens, design standards, and conventions are all read from `design/design-arch.json` (created by a one-time scan) and injected into the context. Every import swap, token mapping, and divergence is recorded in `FORGE NOTES` at the top of the generated file.
-
-Accepts any combination of input types — HTML templates, reference TSX, design images, JSON data shapes, or Claude Design handoff URLs. Designed with token optimization in mind: pre-processing, caching, and ref condensing keep every generation session lean.
+It accepts any combination of input types (HTML templates, TSX, design images, JSON, or Claude Design URLs) and records all decisions in FORGE NOTES at the top of the generated file. Built for token optimization: pre-processing, caching, and reference condensing keep every generation session lean.
 
 ## Installation
 
 ```bash
-# General Agentic Model
-npx skills add extragraj/ui-forge -y -g
+# Installation Command
+npx skills add extragraj/ui-forge
 
 # Claude Code
 npx skills add extragraj/ui-forge -y -g -a claude-code
@@ -29,38 +27,29 @@ npx skills add extragraj/ui-forge -y -g -a claude-code
 npx skills add extragraj/ui-forge -y -g -a codex -a claude-code
 ```
 
-Then wire slash commands and Bash permissions into your project — run once from your project root:
-
-**sh / bash (macOS · Linux · WSL):**
-```sh
-for d in .claude .agents .github .cursor .codex .copilot; do
-  [ -f "$d/skills/ui-forge/scripts/cli.js" ] && node "$d/skills/ui-forge/scripts/cli.js" install && break
-done
-```
-
-**PowerShell (Windows):**
-```powershell
-@('.claude','.agents','.github','.cursor','.codex','.copilot') | % { "$_\skills\ui-forge\scripts\cli.js" } | ? { Test-Path $_ } | select -f 1 | % { node $_ install }
-```
-
-`cli.js install` auto-detects which agentic platform the skill was installed into and writes slash commands and permissions to that platform's directory (`.claude/`, `.agents/`, `.cursor/`, etc.). Re-run any time you switch platforms or reinstall.
-
 | Flag | Description |
 |------|-------------|
 | `-y` | Auto-confirm all prompts |
 | `-g` | Install globally — available across all projects |
 | `-a <agent>` | Install for a specific agent runtime |
 
+### Initialize Slash Commands & Permissions
 
-## How It Works
+Run once from your project root after installing. Registers slash commands with your agentic CLI and adds Bash tool permissions for all UI Forge scripts.
 
-1. **Install the skill** — the Skills CLI registers UI Forge with your agent (see [Installation](#installation) below).
-2. **Scan once** — run `/forge-scan` (Claude Code) or `node <skill-root>/scripts/cli.js scan` (any terminal with Node) to create `design/design-arch.json`. Re-run when you add libraries or update your Tailwind theme.
-3. **Ask your AI assistant** — describe what you want to build. The skill activates automatically, `invoke.js` prepares structured generation context, and your AI assistant generates the component in its own session.
+**1. sh / bash (macOS · Linux · WSL):**
+```sh
+for d in .claude .agents .github .cursor .codex .copilot; do
+  [ -f "$d/skills/ui-forge/scripts/cli.js" ] && node "$d/skills/ui-forge/scripts/cli.js" install && break
+done
+```
 
-`invoke.js` is a context-preparation script — it never calls an AI API. Your coding assistant reads its output and does the generation.
+**2. PowerShell (Windows):**
+```powershell
+@('.claude','.agents','.github','.cursor','.codex','.copilot') | % { "$_\skills\ui-forge\scripts\cli.js" } | ? { Test-Path $_ } | select -f 1 | % { node $_ install }
+```
 
-## Slash Commands (Agentic CLI)
+Auto-detects the agentic platform and writes slash commands to that platform's directory (`.claude/`, `.agents/`, `.cursor/`, etc.). Re-run any time you switch platforms or reinstall.
 
 | Command | Description |
 |---------|-------------|
@@ -69,25 +58,23 @@ done
 | `/forge-verify <component.tsx> <contract.ts>` | Verify a generated component against its contract |
 | `/forge-export-design` | Export design system as a Claude Design–ingestible bundle |
 
-For other CLI/agents that does not support slash commands, use `cli.js` directly — see [Other CLIs / Bash](#other-clis--bash) below or the full reference in [SKILL.md](./SKILL.md).
+For other agents that don't support slash commands, they invoke the skill through Bash tool calls instead.
 
-## Other CLIs / Bash
+## Bash Invocation (AI Agents)  
 
-`cli.js` is the entry point for any non-Claude Code environment. It proxies all commands through to the right script with full argument pass-through.
+When an AI agent (like Codex CLI) doesn't support slash commands, it reads SKILL.md to learn how to invoke the skill, then uses Bash tool calls to run `cli.js` with the appropriate command. The agent determines `SKILL_ROOT` by searching for the skill across common install locations (`.claude/`, `.agents/`, global paths, etc.).
 
-Resolve `SKILL_ROOT` first using `detect.sh` (sh/bash) or `detect.js` (Node.js / Windows):
+When you ask the agent to scan, convert, or verify a component, it handles the full invocation internally. Here's how the skill root is resolved:
 
 ```bash
-# sh / bash — from your project root, point at the known install location:
-SKILL_ROOT="$(sh .claude/skills/ui-forge/scripts/detect.sh)"
-
-# Or use detect.js (works on Windows and any Node environment):
-SKILL_ROOT="$(node .claude/skills/ui-forge/scripts/detect.js)"
-
-# Auto-discover across all platforms (sh / bash):
+# Auto-discover (works across all platforms and install locations):
 for d in .claude .agents .github .cursor .codex .copilot; do
   [ -f "$d/skills/ui-forge/scripts/detect.sh" ] && SKILL_ROOT="$(sh "$d/skills/ui-forge/scripts/detect.sh")" && break
 done
+
+# Or if you know the install path (e.g., .claude/):
+SKILL_ROOT="$(sh .claude/skills/ui-forge/scripts/detect.sh)"
+SKILL_ROOT="$(node .claude/skills/ui-forge/scripts/detect.js)"  # Node.js / Windows
 ```
 
 Then run any command:
@@ -102,23 +89,103 @@ node "$SKILL_ROOT/scripts/cli.js" export
 node "$SKILL_ROOT/scripts/cli.js" help
 ```
 
-### Capturing Forge Stdout Output
+## How the Skill Works
 
-When running `forge` from a terminal, the generation context is written to stdout. To save it to a file for inspection or reuse as a `--refs` input:
+1. **Install once** — Run the Installation steps above to wire slash commands and permissions.
+2. **Scan your project** — Run `/forge-scan` (Claude Code and agents with slash command support) or `node <skill-root>/scripts/cli.js scan` (terminal) to create `design/design-arch.json`. This captures your component libraries, Tailwind tokens, design standards, and conventions. Re-scan when you add libraries or update your theme.
+3. **Ask your AI assistant** — Describe what you want to build (e.g., "Convert this hero section to a component"). The skill activates, `invoke.js` prepares structured generation context from your design system, and your AI assistant generates the production-ready component.
+
+The `invoke.js` is a **context-preparation script**. Your coding assistant reads its output and generates the component using its own session.
+
+## Advanced: Manual Invocation & Inspection
+
+### Resolving SKILL_ROOT in Your Terminal
+
+When running UI Forge commands manually from a terminal, you need to resolve `SKILL_ROOT` to the installed skill location. Use the appropriate command for your shell:
+
+**CMD (Windows Command Prompt):**
+```cmd
+set SKILL_ROOT=%CD%\.claude\skills\ui-forge
+node "%SKILL_ROOT%\scripts\cli.js" scan --quick
+```
+
+**PowerShell (Windows):**
+```powershell
+# Auto-discover approach:
+foreach ($d in ".claude", ".agents", ".github", ".cursor", ".codex", ".copilot") {
+    $path = "$d/skills/ui-forge/scripts/detect.js"
+    if (Test-Path $path) {
+        $SKILL_ROOT = node $path
+        if ($SKILL_ROOT) { break }
+    }
+}
+
+# Or direct approach (if installed under .claude/):
+$SKILL_ROOT = node .claude/skills/ui-forge/scripts/detect.js
+
+node "$SKILL_ROOT/scripts/cli.js" scan --quick
+```
+
+**Bash / Git Bash:**
+```bash
+SKILL_ROOT="$(sh .claude/skills/ui-forge/scripts/detect.sh)"
+node "$SKILL_ROOT/scripts/cli.js" scan --quick
+
+# Or auto-discover across all platforms:
+for d in .claude .agents .github .cursor .codex .copilot; do
+  [ -f "$d/skills/ui-forge/scripts/detect.sh" ] && SKILL_ROOT="$(sh "$d/skills/ui-forge/scripts/detect.sh")" && break
+done
+```
+
+**Zsh (macOS / Linux):**
+```zsh
+SKILL_ROOT="$(sh .claude/skills/ui-forge/scripts/detect.sh)"
+node "$SKILL_ROOT/scripts/cli.js" scan --quick
+
+# Or auto-discover:
+for d in .claude .agents .github .cursor .codex .copilot; do
+  [ -f "$d/skills/ui-forge/scripts/detect.sh" ] && SKILL_ROOT="$(sh "$d/skills/ui-forge/scripts/detect.sh")" && break
+done
+```
+
+### Capturing Generation Context
+
+For debugging or inspecting the generation context, you can capture it to a file:
 
 ```bash
 # sh / bash / PowerShell (CMD)
 node "$SKILL_ROOT/scripts/cli.js" forge --task "Convert hero" --refs ./hero.html > forge-output.md
 
-# PowerShell (explicit UTF-8 — alternative if encoding issues persist)
+# PowerShell (explicit UTF-8 — if encoding issues)
 node "$SKILL_ROOT/scripts/cli.js" forge --task "Convert hero" --refs ./hero.html | Out-File -Encoding utf8 forge-output.md
 ```
 
-> **Windows note:** Starting with v0.2.7C, `invoke.js` forces UTF-8 encoding on piped stdout, so `>` redirection in CMD and PowerShell produces clean UTF-8 output. If you still see garbled text (every character spaced out), use the `Out-File -Encoding utf8` variant above.
+Review the captured file to verify the generation context before asking your AI to generate. The file can also be passed as a `--refs` input to another forge run to reuse a known-good context.
 
-The captured file can later be passed as a `--refs` input to another forge run, or reviewed manually to verify the generation context before the AI writes the component.
+> **Windows note:** The `invoke.js` forces UTF-8 encoding on piped stdout, so `>` redirection in CMD and PowerShell produces clean UTF-8 output. If you see garbled text (characters spaced out), use the `Out-File -Encoding utf8` variant above.
 
-## Page Conversion (Two-Stage)
+## Features
+
+### Signal-Based Generation
+
+UI Forge classifies your inputs and composes the right strategy automatically:
+
+| Signal | Trigger | Behavior |
+|--------|---------|----------|
+| `CONVERT_SECTION` | Default | Single component generation |
+| `CONVERT_PAGE` | >400 lines or task mentions "page" / "landing" | Two-stage pipeline |
+| `CONVERT_VARIANT` | `.ts`/`.tsx` props interface ref with no HTML / image layout | Companion-mode contract implementation |
+| `+CONFIG` | JSON or data file present | Treats JSON keys as typed props schema |
+| `+IMAGE` | Image file attached | Vision API analyzes layout, hierarchy, and colors |
+| `+BRAND` | Ref filename matches `/brand\|voice\|tone/i`, or `arch.designStandards.brand` set | Voice/tone enforcement; brand-color → design-arch token mapping |
+| `+A11Y` | `--a11y`, `a11yRequired` in design-arch or StackShift marker | WCAG 2.1 AA enforcement |
+| `+CREATIVE` | `--creative` (standalone only — refused under `CONVERT_VARIANT`, `CONVERT_PAGE`, and paired mode) | Greenfield generation without a layout ref; appends `// FORGE PHILOSOPHY` directive |
+| `+DIFF` | `--diff <path>` (`CONVERT_SECTION` only — refused under `CONVERT_VARIANT`, `CONVERT_PAGE`, `+CREATIVE`) | Surgical iteration: existing file injected as base; task describes the delta |
+| `+CLAUDE_DESIGN` | `--handoff <url>` or any ref under `design/.handoff-cache/` | Claude Design handoff mode: handoff wins for layout, design-arch wins for tokens |
+
+Signals stack — `CONVERT_SECTION + CONFIG + IMAGE + BRAND + A11Y` is a valid combination and composes all instructions. `+CREATIVE` is mutually exclusive with `CONVERT_VARIANT`, `CONVERT_PAGE`, and paired mode. `+DIFF` is `CONVERT_SECTION`-only and refuses to compose with `+CREATIVE`.
+
+### Page Conversion (Two-Stage)
 
 For pages with multiple sections (>400 lines or when the task mentions "page"), the AI uses a two-stage pipeline.
 
@@ -148,27 +215,6 @@ The AI writes `design/forge-page-plan.json`. Review the plan — set `existingPr
 The plan file exists — UI Forge detects it and generates each `existingProjectSection: false` section sequentially. To discard the plan and restart Stage 1, pass `--replan`.
 
 > Other agents: use `node "$SKILL_ROOT/scripts/cli.js" forge` instead of `/forge`. See [Other CLIs / Bash](#other-clis--bash) for how to resolve `SKILL_ROOT`.
-
-## Features
-
-### Signal-Based Generation
-
-UI Forge classifies your inputs and composes the right strategy automatically:
-
-| Signal | Trigger | Behavior |
-|--------|---------|----------|
-| `CONVERT_SECTION` | Default | Single component generation |
-| `CONVERT_PAGE` | >400 lines or task mentions "page" / "landing" | Two-stage pipeline |
-| `CONVERT_VARIANT` | `.ts`/`.tsx` props interface ref with no HTML / image layout | Companion-mode contract implementation |
-| `+CONFIG` | JSON or data file present | Treats JSON keys as typed props schema |
-| `+IMAGE` | Image file attached | Vision API analyzes layout, hierarchy, and colors |
-| `+BRAND` | Ref filename matches `/brand\|voice\|tone/i`, or `arch.designStandards.brand` set | Voice/tone enforcement; brand-color → design-arch token mapping |
-| `+A11Y` | `--a11y`, `a11yRequired` in design-arch or StackShift marker | WCAG 2.1 AA enforcement |
-| `+CREATIVE` | `--creative` (standalone only — refused under `CONVERT_VARIANT`, `CONVERT_PAGE`, and paired mode) | Greenfield generation without a layout ref; appends `// FORGE PHILOSOPHY` directive |
-| `+DIFF` | `--diff <path>` (`CONVERT_SECTION` only — refused under `CONVERT_VARIANT`, `CONVERT_PAGE`, `+CREATIVE`) | Surgical iteration: existing file injected as base; task describes the delta |
-| `+CLAUDE_DESIGN` | `--handoff <url>` or any ref under `design/.handoff-cache/` | Claude Design handoff mode: handoff wins for layout, design-arch wins for tokens |
-
-Signals stack — `CONVERT_SECTION + CONFIG + IMAGE + BRAND + A11Y` is a valid combination and composes all instructions. `+CREATIVE` is mutually exclusive with `CONVERT_VARIANT`, `CONVERT_PAGE`, and paired mode. `+DIFF` is `CONVERT_SECTION`-only and refuses to compose with `+CREATIVE`.
 
 ### Intelligent Token Mapping
 
@@ -219,7 +265,7 @@ UI Forge ships built-in standards organized as files and directories in `referen
 
 Each injects as its own slot and stays well within the 3,000-char per-slot limit, so nothing is compressed or truncated.
 
-**Directory support (0.2.1+):** Standards can now be a directory. Every `.md` file inside is loaded as its own slot (keyed by filename). This applies to built-in standards, project-local overrides, and explicit `design-arch.json` entries.
+**Directory Support:** Standards can be a directory. Every `.md` file inside is loaded as its own slot (keyed by filename). This applies to built-in standards, project-local overrides, and explicit `design-arch.json` entries.
 
 Project-local standards go in `design/standards/` and are auto-registered by `scan.js`:
 
@@ -256,11 +302,11 @@ node "$SKILL_ROOT/scripts/cli.js" scan --theme plain-tailwind  # No component li
 node "$SKILL_ROOT/scripts/cli.js" scan --theme stackshift    # StackShift UI
 ```
 
-Or with the slash command: `/forge-scan --theme shadcn` (or `--theme stackshift`)
+Or with the slash command: `/forge-scan --theme stackshift` (or any other theme)
 
 Themes are **gap-fill only** — scan findings always win. A theme fills `componentLib`, `usedComponents`, `usedLibraries`, `colorTokens`, and `patterns.*` only when the scanner couldn't detect them. The applied theme is recorded as `arch._theme` in `design-arch.json`.
 
-**StackShift-specific behavior:** `--theme stackshift` does three additional things beyond gap-fill:
+**StackShift Theme Specific Behavior:** `--theme stackshift` does three additional things beyond gap-fill:
 - Forces `isStackShift: true` in `design-arch.json` so the built-in `stackshift-ui` design standards are always injected at forge time — even on empty codebases, with `--quick`, or when the Claude CLI is unavailable.
 - Records the built-in `references/standards/stackshift-ui/` path under `designStandards["stackshift-ui"]`, making active standards visible and overridable at the project level.
 - `install` (run once after adding the skill) also wires the `variant-router` protocol into `designStandards` when stackshift-core is present, resolving `PAIRED: stackshift unknown` version detection.
@@ -373,27 +419,9 @@ Exit `1` on violations (missing default export, disallowed named exports, requir
 - **[Prompt Patterns](./references/prompt-patterns.md)** — Signal composition reference for extending UI Forge
 - **[Built-in Themes](./themes/README.md)** — Available theme starters (`shadcn`, `stackshift`), merge behavior, and how to apply via `scan.js --theme <name>`
 - **[Built-in Design Standards](./references/standards/README.md)** — `stackshift-ui` built-in standard (consolidated StackShift UI conventions), resolution order, and how to author project-local overrides
-- **[Versions](./references/versions.md)** — Node, Next.js, StackShift, component library compatibility matrix
+- **[Versions](./references/versions.md)** — Node, Next.js, StackShift, component library compatibility matri
 
-**CLI flags** (passed to `/forge` in Claude Code, or directly to `invoke.js` in Codex CLI / other agents):
-
-| Flag | Description |
-|------|-------------|
-| `--task` | What to build (required unless `--handoff` provides a README heading) |
-| `--refs` | Comma-separated reference file paths |
-| `--handoff <url>` | Claude Design handoff URL — fetches refs automatically, adds `+CLAUDE_DESIGN` |
-| `--output` | Write result to file path |
-| `--signal` | Force primary signal: `CONVERT_SECTION`, `CONVERT_PAGE`, `CONVERT_VARIANT` |
-| `--mode` | `full` (default) or `body-only`. Default is `body-only` under `CONVERT_VARIANT`. |
-| `--a11y` | Enable `+A11Y` modifier (WCAG 2.1 AA enforcement) |
-| `--creative` | Enable `+CREATIVE` modifier (greenfield generation; standalone only) |
-| `--diff <path>` | Enable `+DIFF` modifier (iterative regeneration; `--output` defaults to the same path) |
-| `--no-default-standards` | Skip built-in fallback standards (arch + project only) |
-| `--rescan` | Re-run `scan.js` before generating |
-| `--replan` | Force Stage 1 page plan regeneration |
-| `--config` | Load all params from a JSON file |
-
-**Scan-only flags** (`scripts/scan.js`):
+**Scan Script Flags** (`scripts/scan.js`):
 
 | Flag | Description |
 |------|-------------|
@@ -410,7 +438,8 @@ Full release notes are in [`change-logs/`](./change-logs/).
 
 | Version | Date | Notes |
 |---------|------|-------|
-| [0.2.7D](./change-logs/0-2-7D-group-f-missing-features.md) | 2026-05-05 | Group F missing features — documented modification/fix mode for rebuild use cases (F-1), added mechanical anti-slop fidelity checklist against reference HTML (F-2), documented +IMAGE fallback requirement for vision-provided screenshots (F-3), created built-in Next.js + Sanity image rendering standard (F-4). |
+| [0.2.7E](./change-logs/0-2-7E-documentation-restructure-and-clarity.md) | 2026-05-06 | Documentation restructure & cross-platform clarity — reorganized README with clearer installation flow, new Advanced section for manual invocation, moved Page Conversion to Features subsection; condensed CLAUDE.md from 306 to 109 lines (converted architecture to tables, removed redundant examples); updated SKILL.md to clarify cross-platform support (Cursor, Codex, etc.) and marked Claude Design features as Claude.ai-exclusive; fixed detect.js symlink-aware skill-root resolution. |
+| [0.2.7D](./change-logs/0-2-7D-missing-features-or-enhancements.md) | 2026-05-05 | Missing features — documented modification/fix mode for rebuild use cases, added mechanical anti-slop fidelity checklist against reference HTML, documented +IMAGE fallback requirement for vision-provided screenshots, created built-in Next.js + Sanity image rendering standard. |
 | [0.2.7C](./change-logs/0-2-7C-utf8-stdout-encoding-fix.md) | 2026-05-05 | UTF-8 stdout encoding fix — forces UTF-8 on piped stdout on Windows, preventing PowerShell UTF-16 LE redirection from producing garbled output (E-1). |
 | [0.2.7B](./change-logs/0-2-7B-forge-notes-placement-spec-fix.md) | 2026-05-05 | FORGE NOTES placement spec fix — resolves latent conflict between main "Begin with // FORGE NOTES" instruction and body-only mode's "after last import" rule (D-1). Documentation-only fix; runtime behavior was already correct. |
 | [0.2.7](./change-logs/0-2-7-stackshift-theme-discoverability.md) | 2026-05-05 | StackShift integration fixes — `stackshift` added to all CLI help text (G-1); `--theme stackshift` now forces `isStackShift: true` so stackshift-ui standards are never skipped (G-2); `scan.js` creates `design/standards/` and records the built-in stackshift-ui path in `designStandards` (G-3); `install` wires `variant-router` into `design-arch.json` when stackshift-core is present (G-4) |

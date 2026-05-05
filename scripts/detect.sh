@@ -15,32 +15,48 @@ for _ENV_VAR in "$CLAUDE_SKILL_DIR" "$CLAUDE_PLUGIN_ROOT" "$SKILL_ROOT"; do
   fi
 done
 
-# Priority 2 — Walk known project-local install locations (all supported platforms):
-#   Claude Code → Codex/universal (.agents) → GitHub Copilot → Cursor → Codex → Copilot → Gemini → fallbacks
-# Then global user installs.
-for CANDIDATE in \
-  "./.claude/skills/ui-forge" \
-  "./.agents/skills/ui-forge" \
-  "./.github/skills/ui-forge" \
-  "./.cursor/skills/ui-forge" \
-  "./.codex/skills/ui-forge" \
-  "./.copilot/skills/ui-forge" \
-  "./.agentic/skills/ui-forge" \
-  "./.gemini/antigravity/skills/ui-forge" \
-  "$HOME/.claude/skills/ui-forge" \
-  "$HOME/.agents/skills/ui-forge" \
-  "$HOME/.copilot/skills/ui-forge" \
-  "$HOME/.cursor/skills/ui-forge" \
-  "$HOME/.codex/skills/ui-forge" \
-  "$HOME/.agentic/skills/ui-forge" \
-  "$HOME/.gemini/antigravity/skills/ui-forge" \
-  "/etc/codex/skills/ui-forge"; do
-  if [ -f "$CANDIDATE/SKILL.md" ]; then
-    cd "$CANDIDATE" && echo "$(pwd)" && exit 0
+# Priority 2 — Return the skill root of this script (not a searched path)
+_SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+_SKILL_ROOT="$(dirname "$_SCRIPT_DIR")"
+
+if [ -f "$_SKILL_ROOT/SKILL.md" ]; then
+  echo "$_SKILL_ROOT"
+  exit 0
+fi
+
+# Priority 3 — Search local project paths (relative to cwd)
+for _d in .claude .agents .github .cursor .codex .copilot .agentic; do
+  if [ -f "$_d/skills/ui-forge/SKILL.md" ]; then
+    echo "$(cd "$_d/skills/ui-forge" && pwd)"
+    exit 0
   fi
 done
 
-# Priority 3 — Not found. Emit actionable error.
+# .gemini has a different subpath
+if [ -f ".gemini/antigravity/skills/ui-forge/SKILL.md" ]; then
+  echo "$(cd ".gemini/antigravity/skills/ui-forge" && pwd)"
+  exit 0
+fi
+
+# Priority 4 — Search global install paths
+_H="$HOME"
+for _g in \
+  "$_H/.claude/skills/ui-forge" \
+  "$_H/.agents/skills/ui-forge" \
+  "$_H/.copilot/skills/ui-forge" \
+  "$_H/.cursor/skills/ui-forge" \
+  "$_H/.codex/skills/ui-forge" \
+  "$_H/.agentic/skills/ui-forge" \
+  "$_H/.gemini/antigravity/skills/ui-forge" \
+  "/etc/codex/skills/ui-forge"
+do
+  if [ -f "$_g/SKILL.md" ]; then
+    echo "$_g"
+    exit 0
+  fi
+done
+
+# Priority 5 — Not found. Emit actionable error.
 echo "ui-forge: skill directory not found." >&2
 echo "" >&2
 echo "Install with:" >&2

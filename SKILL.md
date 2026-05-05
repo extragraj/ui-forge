@@ -33,14 +33,16 @@ Contains: component directories, used libraries, Tailwind tokens, global CSS, de
 No API key required by the scripts. Generation context is prepared by `invoke.js`; you
 generate the component from that context.
 
-**Scan synthesis model:** When the `claude` CLI is available (Claude Code, Cursor, etc.),
+**Scan synthesis model:** When the `claude` CLI is available (Claude Code, Cursor, AntiGravity, and other agentic platforms),
 `scan.js` uses `claude-haiku-4-5-20251001` for design-system pattern synthesis — fast and
 cost-effective. Falls back to static analysis automatically when the CLI is not found; no
 error and no API key required in either case.
 
 ## Usage
 
-### Claude Code (slash commands)
+### Slash Commands (Agentic CLI)
+
+Works in Claude Code, Cursor, Codex, and other agentic platforms that support slash commands.
 
 Install via the Skills CLI, then run once to wire slash commands and Bash permissions:
 
@@ -91,21 +93,21 @@ Multiple refs are comma-separated.
 /forge-verify ./components/Variant.tsx ./types.ts
 ```
 
-**Claude Design handoff:**
+**Claude Design handoff (Claude.ai exclusive):**
 
 ```
 /forge --handoff https://claude.ai/design/h/<id> --output ./components/Hero.tsx
 ```
 
-Fetches the Claude Design handoff, materializes refs into `design/.handoff-cache/`, and generates the component remapped to project tokens. `--task` is optional — derived from the handoff README heading when omitted.
+Fetches the Claude Design handoff (available only in Claude.ai), materializes refs into `design/.handoff-cache/`, and generates the component remapped to project tokens. `--task` is optional — derived from the handoff README heading when omitted.
 
-**Export design system for Claude Design:**
+**Export design system for Claude Design (Claude.ai exclusive):**
 
 ```
 /forge-export-design
 ```
 
-Writes `design/claude-design-bundle/` — a folder with `README.md`, `tokens.json`, `components.md`, `conventions.md`, `globals.css`, and `standards/`. Upload to Claude Design or paste `README.md` into the design-system onboarding step so prototypes use your real tokens from the start.
+Writes `design/claude-design-bundle/` — a folder with `README.md`, `tokens.json`, `components.md`, `conventions.md`, `globals.css`, and `standards/`. Upload to Claude Design (Claude.ai feature) or paste `README.md` into the design-system onboarding step so prototypes use your real tokens from the start.
 
 **Round-trip workflow:**
 
@@ -160,10 +162,18 @@ npx extragraj/ui-forge scan --quick
 npx extragraj/ui-forge forge --task "..." --refs ./ref.html --output ./Hero.tsx
 ```
 
-For environments where the skill root isn't `.claude/skills/ui-forge`, resolve it first:
+**Resolving SKILL_ROOT** — Use the auto-discover approach if the skill root location is unknown. Alternatively, if you know the install path (e.g., `.claude/`), you can invoke detect directly:
 
 ```bash
-SKILL_ROOT="$(sh .claude/skills/ui-forge/scripts/detect.sh)"
+# Auto-discover (works regardless of install location):
+for d in .claude .agents .github .cursor .codex .copilot; do
+  [ -f "$d/skills/ui-forge/scripts/detect.sh" ] && SKILL_ROOT="$(sh "$d/skills/ui-forge/scripts/detect.sh")" && break
+done
+
+# Or if installed globally or in known location, use directly:
+SKILL_ROOT="$(sh .claude/skills/ui-forge/scripts/detect.sh)"  # if in .claude/
+SKILL_ROOT="$(node .claude/skills/ui-forge/scripts/detect.js)"  # Node.js (works on Windows)
+
 node "$SKILL_ROOT/scripts/cli.js" scan --quick
 ```
 
