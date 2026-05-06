@@ -1,3 +1,6 @@
+#StackShift Workflow Skill
+.stackshift/**
+
 # Tests
 tests/**
 

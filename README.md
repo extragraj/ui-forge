@@ -4,7 +4,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org)
 [![Skills Compatible](https://img.shields.io/badge/skills-compatible-blue)](https://github.com/vercel/skills-cli)
 
-> **Version** 0.2.7
+> **Version** 0.2.8
 
 Next.js component generator for Codex CLI, Claude Code, and other AI coding assistants. Converts HTML, TSX, images, and JSON reference materials into production-ready components that match your project's existing design system — using your actual component libraries, Tailwind tokens, and coding conventions.
 
@@ -306,10 +306,12 @@ Or with the slash command: `/forge-scan --theme stackshift` (or any other theme)
 
 Themes are **gap-fill only** — scan findings always win. A theme fills `componentLib`, `usedComponents`, `usedLibraries`, `colorTokens`, and `patterns.*` only when the scanner couldn't detect them. The applied theme is recorded as `arch._theme` in `design-arch.json`.
 
-**StackShift Theme Specific Behavior:** `--theme stackshift` does three additional things beyond gap-fill:
+**StackShift Theme Specific Behavior:** `--theme stackshift` does the following beyond gap-fill:
 - Forces `isStackShift: true` in `design-arch.json` so the built-in `stackshift-ui` design standards are always injected at forge time — even on empty codebases, with `--quick`, or when the Claude CLI is unavailable.
-- Records the built-in `references/standards/stackshift-ui/` path under `designStandards["stackshift-ui"]`, making active standards visible and overridable at the project level.
-- `install` (run once after adding the skill) also wires the `variant-router` protocol into `designStandards` when stackshift-core is present, resolving `PAIRED: stackshift unknown` version detection.
+- Copies `references/standards/stackshift-ui/` to `design/standards/stackshift-ui/` (project-local, versionable, editable) and records the project-local path under `designStandards["stackshift-ui"]`.
+- Copies general built-in standards (`nextjs-image.md`, `sample-standard.md`) to `design/standards/` and auto-registers them.
+- Handles `.forgeignore` with three-way logic: creates from StackShift template if missing, overwrites if it's a UI Forge template, or appends StackShift exclusions to an existing custom file.
+- Preserves the `_paired` mirror block in `design-arch.json` on re-scan so StackShift paired-mode markers are never lost.
 
 See [Built-in Themes](./themes/README.md) for the full preset list and merge rules.
 
@@ -337,7 +339,7 @@ Created by `scan.js` and cached until you re-run it. The v3 schema:
   "usedLibraries": [{ "name": "framer-motion", "version": "^12.0.0", "uses": 14 }],
   "tailwind": { "themeSection": "...", "colorTokens": "primary, secondary, accent" },
   "globalCss": "...",
-  "designStandards": { "stackshift-ui": "./.claude/skills/ui-forge/references/standards/stackshift-ui" },
+  "designStandards": { "stackshift-ui": "./design/standards/stackshift-ui" },
   "patterns": {
     "spacing": "4-based scale with py-20 sections",
     "typography": "font-sans default, headings font-bold",
@@ -438,6 +440,7 @@ Full release notes are in [`change-logs/`](./change-logs/).
 
 | Version | Date | Notes |
 |---------|------|-------|
+| [0.2.8](./change-logs/0-2-8-forgeignore-standards-and-scan-fixes.md) | 2026-05-06 | .forgeignore, standards copy & scan fixes — `cli.js install` writes correct default template; `--theme stackshift` handles .forgeignore with create/overwrite/append logic; removed obsolete variant-router linking; copies built-in standards (stackshift-ui, nextjs-image, sample-standard) to project-local `design/standards/`; preserves `_paired` block on re-scan; documented naming distinction between `stackshift-ui` and `stackshift-section-variants`. |
 | [0.2.7E](./change-logs/0-2-7E-documentation-restructure-and-clarity.md) | 2026-05-06 | Documentation restructure & cross-platform clarity — reorganized README with clearer installation flow, new Advanced section for manual invocation, moved Page Conversion to Features subsection; condensed CLAUDE.md from 306 to 109 lines (converted architecture to tables, removed redundant examples); updated SKILL.md to clarify cross-platform support (Cursor, Codex, etc.) and marked Claude Design features as Claude.ai-exclusive; fixed detect.js symlink-aware skill-root resolution. |
 | [0.2.7D](./change-logs/0-2-7D-missing-features-or-enhancements.md) | 2026-05-05 | Missing features — documented modification/fix mode for rebuild use cases, added mechanical anti-slop fidelity checklist against reference HTML, documented +IMAGE fallback requirement for vision-provided screenshots, created built-in Next.js + Sanity image rendering standard. |
 | [0.2.7C](./change-logs/0-2-7C-utf8-stdout-encoding-fix.md) | 2026-05-05 | UTF-8 stdout encoding fix — forces UTF-8 on piped stdout on Windows, preventing PowerShell UTF-16 LE redirection from producing garbled output (E-1). |

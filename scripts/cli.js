@@ -107,36 +107,14 @@ function install() {
   }
   writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
 
-  // Write .forgeignore for StackShift projects if one doesn't already exist
-  const stackshiftMarker = join(cwd, '.stackshift', 'installed.json');
+  // Write .forgeignore from the general template if one doesn't already exist
   const forgeignorePath = join(cwd, '.forgeignore');
-  if (existsSync(stackshiftMarker) && !existsSync(forgeignorePath)) {
-    const template = join(SKILL_ROOT, 'references', 'default-stackshift-forgeignore.txt');
+  if (!existsSync(forgeignorePath)) {
+    const template = join(SKILL_ROOT, 'references', 'default-forgeignore.txt');
     if (existsSync(template)) {
       writeFileSync(forgeignorePath, readFileSync(template, 'utf8'), 'utf8');
-      console.log('.forgeignore created from StackShift template.\n');
+      console.log('.forgeignore created from default template.\n');
     }
-  }
-
-  // G-4: Wire variant-router standard into design-arch.json when StackShift is present.
-  // Requires design-arch.json to exist from a prior scan (reasonable post-install assumption).
-  const archPath = join(cwd, 'design', 'design-arch.json');
-  if (existsSync(stackshiftMarker) && existsSync(archPath)) {
-    try {
-      const arch = JSON.parse(readFileSync(archPath, 'utf8'));
-      if (!arch.designStandards?.['variant-router']) {
-        arch.designStandards = arch.designStandards ?? {};
-        // Path is relative to project root; resolves to the stackshift-core skill protocol
-        const variantRouterPath = join(platformDir, 'skills', 'stackshift-core', 'protocols', 'variant-router.md');
-        if (existsSync(variantRouterPath)) {
-          // Store as a relative posix path from project root
-          const rel = variantRouterPath.replace(cwd, '').replace(/\\/g, '/').replace(/^\//, './');
-          arch.designStandards['variant-router'] = rel;
-          writeFileSync(archPath, JSON.stringify(arch, null, 2) + '\n', 'utf8');
-          console.log('design-arch.json: variant-router standard linked.\n');
-        }
-      }
-    } catch {}
   }
 
   console.log('UI Forge install complete.\n');

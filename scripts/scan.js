@@ -339,11 +339,62 @@ function readClaudeMd() {
   return readFileSync(p, 'utf-8').slice(0, 1500)
 }
 
+function copyBuiltinStandard(srcName, destName) {
+  const src = join(CLAUDE_SKILL_DIR, 'references', 'standards', srcName)
+  const dest = join(PROJECT_ROOT, 'design', 'standards', destName)
+  if (!existsSync(src)) return false
+  if (existsSync(dest)) return false // preserve project edits
+  try {
+    const content = readFileSync(src, 'utf-8')
+    writeFileSync(dest, content, 'utf-8')
+    return true
+  } catch { return false }
+}
+
+function copyBuiltinStandardDir(srcDir, destDir) {
+  const src = join(CLAUDE_SKILL_DIR, 'references', 'standards', srcDir)
+  const dest = join(PROJECT_ROOT, 'design', 'standards', destDir)
+  if (!existsSync(src)) return false
+  if (existsSync(dest)) return false // preserve project edits
+  try {
+    mkdirSync(dest, { recursive: true })
+    for (const entry of readdirSync(src, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith('.md')) continue
+      const content = readFileSync(join(src, entry.name), 'utf-8')
+      writeFileSync(join(dest, entry.name), content, 'utf-8')
+    }
+    return true
+  } catch { return false }
+}
+
 function findDesignStandards(isStackShift) {
   const standards = {}
 
-  // Auto-detect StackShift standard if StackShift project
+  // Ensure design/standards/ exists so project-level overrides have a clear home
+  const standardsDir = join(PROJECT_ROOT, 'design', 'standards')
+  if (!existsSync(standardsDir)) {
+    try { mkdirSync(standardsDir, { recursive: true }) } catch {}
+  }
+
+  // Issue 5: Copy general built-in standards to project (always, not StackShift-exclusive)
+  const generalStandards = [
+    { src: 'nextjs-image.md', dest: 'nextjs-image.md' },
+    { src: 'sample-standard.md', dest: 'sample-standard.md' },
+  ]
+  for (const { src, dest } of generalStandards) {
+    if (copyBuiltinStandard(src, dest)) {
+      process.stderr.write(`  copied built-in standard: ${dest}\n`)
+    }
+  }
+
+  // Issue 4: Copy stackshift-ui standards directory to project when StackShift
   if (isStackShift) {
+    const stackshiftUiCopied = copyBuiltinStandardDir('stackshift-ui', 'stackshift-ui')
+    if (stackshiftUiCopied) {
+      process.stderr.write('  copied built-in standard: stackshift-ui/\n')
+    }
+
+    // Auto-detect StackShift standard if StackShift project
     const candidates = [
       'design/standards/stackshift-ui.md',
       'STACKSHIFT_UI_STANDARD.md',
@@ -357,22 +408,17 @@ function findDesignStandards(isStackShift) {
       }
     }
 
-    // G-3: record the built-in stackshift-ui standards directory so it's
-    // visible in design-arch.json for traceability and override discovery.
-    // invoke.js Step 3 already loads this directory, but without this entry
-    // designStandards appears empty even when the standards are active.
-    if (!standards['stackshift-ui']) {
+    // Record the project-local path (or built-in fallback if copy was skipped)
+    const projectStackshiftUi = join(PROJECT_ROOT, 'design', 'standards', 'stackshift-ui')
+    if (existsSync(projectStackshiftUi)) {
+      standards['stackshift-ui'] = './design/standards/stackshift-ui'
+    } else {
+      // Fall back to built-in path if project copy doesn't exist
       const builtinPath = join(CLAUDE_SKILL_DIR, 'references', 'standards', 'stackshift-ui')
       if (existsSync(builtinPath)) {
         standards['stackshift-ui'] = './' + relative(PROJECT_ROOT, builtinPath).replace(/\\/g, '/')
       }
     }
-  }
-
-  // G-3: ensure design/standards/ exists so project-level overrides have a clear home
-  const standardsDir = join(PROJECT_ROOT, 'design', 'standards')
-  if (!existsSync(standardsDir)) {
-    try { mkdirSync(standardsDir, { recursive: true }) } catch {}
   }
 
   // Auto-register project-local standards shipped under design/standards/*.md.
@@ -561,6 +607,44 @@ function synthesize(payload, pkgCount) {
   return tryClaudeCLI(payload) ?? staticFallback(pkgCount)
 }
 
+// ─── .forgeignore handling for --theme stackshift ──────────────────────────────
+
+function handleStackshiftForgeignore() {
+  const forgeignorePath = join(PROJECT_ROOT, '.forgeignore')
+  const stackshiftTemplate = join(CLAUDE_SKILL_DIR, 'references', 'default-stackshift-forgeignore.txt')
+  const defaultTemplate = join(CLAUDE_SKILL_DIR, 'references', 'default-forgeignore.txt')
+
+  if (!existsSync(stackshiftTemplate)) return
+
+  const stackshiftContent = readFileSync(stackshiftTemplate, 'utf-8')
+
+  if (!existsSync(forgeignorePath)) {
+    // Does not exist → create from stackshift template
+    writeFileSync(forgeignorePath, stackshiftContent, 'utf-8')
+    process.stderr.write('  .forgeignore created from StackShift template.\n')
+    return
+  }
+
+  const existingContent = readFileSync(forgeignorePath, 'utf-8')
+
+  // Check if it's a UI Forge template (has the IDENTIFIER marker)
+  if (existingContent.includes('IDENTIFIER: ui-forge-template')) {
+    // Template → overwrite with stackshift content
+    writeFileSync(forgeignorePath, stackshiftContent, 'utf-8')
+    process.stderr.write('  .forgeignore overwritten with StackShift template (was default template).\n')
+    return
+  }
+
+  // Non-template existing file → append stackshift content (guarded to prevent duplicates)
+  const guardHeader = '# --- StackShift exclusions (appended by UI Forge) ---'
+  if (!existingContent.includes(guardHeader)) {
+    writeFileSync(forgeignorePath, existingContent.trimEnd() + '\n\n' + guardHeader + '\n' + stackshiftContent, 'utf-8')
+    process.stderr.write('  .forgeignore: StackShift exclusions appended.\n')
+  } else {
+    process.stderr.write('  .forgeignore: StackShift exclusions already present, skipped.\n')
+  }
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 function main() {
@@ -568,6 +652,11 @@ function main() {
 
   const theme = loadTheme(THEME_NAME)
   if (theme) process.stderr.write(`  applying theme starter: ${THEME_NAME}\n`)
+
+  // Issue 2: Handle .forgeignore when --theme stackshift is used
+  if (THEME_NAME === 'stackshift') {
+    handleStackshiftForgeignore()
+  }
 
   const ignore = loadIgnorePatterns()
   const files = collectSourceFiles(ignore)
@@ -611,9 +700,9 @@ function main() {
     pkgCount
   )
 
-  // In patch mode, merge into existing arch rather than replacing
+  // Gap 1: Always read existing arch to preserve non-scan fields (e.g. _paired)
   let existing = {}
-  if (PATCH_MODE && existsSync(OUT_FILE)) {
+  if (existsSync(OUT_FILE)) {
     try { existing = JSON.parse(readFileSync(OUT_FILE, 'utf-8')) } catch {}
   }
 
@@ -636,11 +725,15 @@ function main() {
       }
     : null
 
+  // Gap 1: Always preserve _paired block (StackShift bootstrap writes it)
+  const paired = existing._paired
+
   const arch = {
     ...existing,
     _v: SCHEMA_V4 ? 4 : 3,
     _scanned: new Date().toISOString(),
     isStackShift: s.isStackShift,
+    ...(paired ? { _paired: paired } : {}),
     componentLib: componentDirs,  // Now an array
     usedComponents,
     usedLibraries,

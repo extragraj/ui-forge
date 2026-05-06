@@ -1,5 +1,6 @@
-# .forgeignore — UI Forge scan exclude patterns
+# .forgeignore — UI Forge scan exclude patterns (TEMPLATE)
 # ------------------------------------------------------------------------------
+# IDENTIFIER: ui-forge-template
 # This is a TEMPLATE. It ships empty by default so UI Forge doesn't silently
 # exclude files the target project cares about. Copy this file to the ROOT of
 # the project you're scanning (as `.forgeignore`) and uncomment / add patterns
