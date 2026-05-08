@@ -77,10 +77,22 @@ function findGlobalCssPath() {
 
 function extractStandardDescription(content) {
   const stripped = content.replace(/<!--[\s\S]*?-->/g, '').split('\n')
+  const directiveRE = /\b(Never|Always|Must|Must not|Do not|Required|Require|Only|Should not|Cannot)\b/i
+
+  // First pass: look for the strongest directive line
+  let bestMatch = null
+  for (const line of stripped) {
+    const t = line.trim()
+    if (t.startsWith('#') || t.startsWith('//') || t.startsWith('---')) continue
+    if (directiveRE.test(t) && t.length < 150) bestMatch = t
+  }
+  if (bestMatch) return `RULE: ${bestMatch.slice(0, 140)} — READ FULL FILE`
+
+  // Fallback: first substantive non-heading line (current behavior + READ FULL FILE suffix)
   for (const line of stripped) {
     const t = line.trim()
     if (!t || t.startsWith('#') || t.startsWith('//') || t.startsWith('---') || t.startsWith('*') && t.length < 3) continue
-    return t.slice(0, 120)
+    return `${t.slice(0, 120)} — READ FULL FILE`
   }
   return null
 }
@@ -682,15 +694,37 @@ function loadComposedAddendum(signals, isLite = false) {
 
 // ─── Context output builders ──────────────────────────────────────────────────
 
-function appendStandards(lines, standardsResult, isLite = false) {
+function appendStandards(lines, standardsResult, isLite = false, task = '') {
   if (!standardsResult) return
   const { standards, paths } = standardsResult
   const keys = Object.keys(standards)
   if (keys.length === 0) return
 
+  // Score and sort standards by task relevance (Option B — Issue 6)
+  function scoreStandard(key) {
+    if (!task) return 0
+    const taskLower = task.toLowerCase()
+    const keyWords = key.toLowerCase().split(/[-_]/)
+    let score = 0
+    for (const word of keyWords) {
+      if (taskLower.includes(word)) score += 3
+    }
+    // Bonus: check the standard's description text too
+    const content = standards[key]?.toLowerCase() ?? ''
+    const contentWords = content.split(/\s+/).slice(0, 50)
+    for (const word of contentWords) {
+      if (taskLower.includes(word)) score += 1
+    }
+    return score
+  }
+
+  const sorted = Object.entries(standards).sort(
+    (a, b) => scoreStandard(b[0]) - scoreStandard(a[0])
+  )
+
   lines.push('')
   lines.push('DESIGN STANDARDS (load as needed)')
-  for (const [key, content] of Object.entries(standards)) {
+  for (const [key, content] of sorted) {
     const filePath = paths?.[key]
     const relPath = filePath
       ? relative(PROJECT_ROOT, filePath).replace(/\\/g, '/')
@@ -724,7 +758,7 @@ function buildSectionContext({ task, archCtx, signals, standards, addendum, outp
   lines.push('')
   lines.push('DESIGN AUTHORITY: design/design-arch.json')
   lines.push(archCtx)
-  appendStandards(lines, standards, signals.isLite)
+  appendStandards(lines, standards, signals.isLite, task)
 
   if (mainRef) {
     lines.push('')
@@ -764,7 +798,10 @@ function buildSectionContext({ task, archCtx, signals, standards, addendum, outp
     lines.push(diffSource.content)
   }
 
-  if (!signals.isLite) {
+  // In lite mode, the addendum from prompt-patterns.md is a single-line reference,
+  // so hardcoded IMPLEMENTATION and ANTI-SLOP GUARDRAILS are essential to provide
+  // concrete guidance. In non-lite mode, the full addendum covers these already.
+  if (signals.isLite) {
     lines.push('')
     lines.push('IMPLEMENTATION')
     lines.push('1. Identify the primary layout pattern from REFERENCE')
@@ -787,6 +824,13 @@ function buildSectionContext({ task, archCtx, signals, standards, addendum, outp
   if (output) lines.push(`WRITE OUTPUT TO: ${output}`)
   lines.push('Begin with // FORGE NOTES then raw TSX. No markdown fences. No preamble after FORGE NOTES.')
   lines.push('Multiple files: separate with // --- FILE: relative/path/to/file.tsx')
+
+  // FORGE NOTES compliance requirement — only when standards exist (Option D — Issue 6)
+  if (standards && Object.keys(standards.standards).length > 0) {
+    lines.push('')
+    lines.push('STANDARDS COMPLIANCE: In FORGE NOTES, list every consulted standard and how it was applied.')
+    lines.push('  Example: "// 04-color-tokens: applied (bg-primary, text-primary-foreground — no raw hex)"')
+  }
 
   if (verify) {
     lines.push('')
@@ -946,21 +990,6 @@ function buildPageStage2Context({ archCtx, signals, standards, addendum, plan, m
   lines.push(archCtx)
   appendStandards(lines, standards, isLite)
   lines.push('')
-  if (!isLite) {
-    lines.push('IMPLEMENTATION')
-    lines.push('1. Identify the primary layout pattern from each REFERENCE excerpt')
-    lines.push('2. Map reference CSS classes/values to design-arch.json tokens')
-    lines.push('3. Check DESIGN STANDARDS relevant to components used')
-    lines.push('4. Write FORGE NOTES then generate TSX for each section')
-    lines.push('')
-    lines.push('ANTI-SLOP GUARDRAILS')
-    lines.push('- No default hero gradients unless reference explicitly shows them')
-    lines.push('- No rainbow headings — single-color or design-arch tokens only')
-    lines.push('- Padding/spacing must match reference CSS values — do not default to py-20')
-    lines.push('- Background: confirm dark vs light from reference — do not assume dark')
-    lines.push('- No filler CTAs or Lorem ipsum — reproduce content from reference exactly')
-    lines.push('')
-  }
   lines.push('GENERATION INSTRUCTIONS')
   lines.push(addendum)
   lines.push('Generate each section below in order. Write each to the specified file.')
@@ -1046,7 +1075,7 @@ function main() {
 
   if (!params.task && !params['validate-input']) {
     process.stderr.write(`
-ui-forge — Next.js component generator for Claude Code
+ui-forge — Next.js component generator for Agentic Model
 
   --task     What to build (required unless --handoff provides a README heading)
   --refs     Comma-separated ref files (HTML, TSX, JSON, image, markdown)
@@ -1069,6 +1098,7 @@ ui-forge — Next.js component generator for Claude Code
   --validate-input  Pre-flight validate the incoming props interface file before
              generating context. CONVERT_VARIANT only. Fails fast on malformed contract.
   --no-default-standards  Skip built-in fallback standards (arch + project only)
+  --verify-standards  Run post-generation design standards compliance check
   --config   Load all params from JSON file
   --rescan   Re-run scan.js before generating
   --replan   Force Stage 1 page plan regeneration
@@ -1086,10 +1116,12 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
     if (params[flag] === 'true') params[flag] = true
   // Normalise kebab-case flags → camelCase for internal use
   if (params['no-default-standards']) params.noDefaultStandards = true
+  if (params['verify-standards']) params.verifyStandards = true
   const preview = params.preview === true
   const verifyMode = params.verify === true
   const validateInput = params['validate-input'] === true
   const isLite = params.lite === true
+  const verifyStandards = params.verifyStandards === true
 
   if (validateInput && !params.task && !params.refs) {
     process.stderr.write('ui-forge error: --validate-input requires --refs <interface-file> (and optionally --signal CONVERT_VARIANT)\n')

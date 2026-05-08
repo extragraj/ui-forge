@@ -376,10 +376,14 @@ function findDesignStandards(isStackShift) {
     try { mkdirSync(standardsDir, { recursive: true }) } catch {}
   }
 
-  // Issue 5: Copy general built-in standards to project (always, not StackShift-exclusive)
+  // Copy general built-in standards to project (always, not StackShift-exclusive).
+  // sample-standard.md is a template for users to copy, not an active standard.
+  // It is copied as _template-standard.md (underscore prefix = meta/template) so
+  // the auto-registration loop below skips it (only .md files without underscore
+  // prefix are registered as active designStandards).
   const generalStandards = [
     { src: 'nextjs-image.md', dest: 'nextjs-image.md' },
-    { src: 'sample-standard.md', dest: 'sample-standard.md' },
+    { src: 'sample-standard.md', dest: '_template-standard.md' },
   ]
   for (const { src, dest } of generalStandards) {
     if (copyBuiltinStandard(src, dest)) {
@@ -424,10 +428,14 @@ function findDesignStandards(isStackShift) {
   // Auto-register project-local standards shipped under design/standards/*.md.
   // Keys are the file basename (e.g. typography.md → "typography"). Existing
   // entries (including stackshiftComponentStandard above) are not overwritten.
+  // Files starting with underscore (e.g. _template-standard.md) are meta/template
+  // files and are NOT registered as active designStandards.
   if (existsSync(standardsDir)) {
     try {
       for (const entry of readdirSync(standardsDir, { withFileTypes: true })) {
         if (!entry.isFile() || !entry.name.endsWith('.md')) continue
+        // Skip underscore-prefixed files (meta/template files, not active standards)
+        if (entry.name.startsWith('_')) continue
         const key = entry.name.replace(/\.md$/, '')
         if (standards[key]) continue
         standards[key] = `./design/standards/${entry.name}`
@@ -609,6 +617,25 @@ function synthesize(payload, pkgCount) {
 
 // ─── .forgeignore handling for --theme stackshift ──────────────────────────────
 
+function mergeForgeignoreLines(existingContent, stackshiftContent) {
+  const existingLines = new Set(
+    existingContent.split('\n')
+      .map(l => l.trim())
+      .filter(l => l && !l.startsWith('#'))
+  )
+  const newLines = []
+  const stackshiftLines = stackshiftContent.split('\n')
+  for (const line of stackshiftLines) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) {
+      newLines.push(line)  // keep comments/blank lines
+    } else if (!existingLines.has(trimmed)) {
+      newLines.push(line)  // only add genuinely new patterns
+    }
+  }
+  return newLines.join('\n')
+}
+
 function handleStackshiftForgeignore() {
   const forgeignorePath = join(PROJECT_ROOT, '.forgeignore')
   const stackshiftTemplate = join(CLAUDE_SKILL_DIR, 'references', 'default-stackshift-forgeignore.txt')
@@ -635,14 +662,10 @@ function handleStackshiftForgeignore() {
     return
   }
 
-  // Non-template existing file → append stackshift content (guarded to prevent duplicates)
-  const guardHeader = '# --- StackShift exclusions (appended by UI Forge) ---'
-  if (!existingContent.includes(guardHeader)) {
-    writeFileSync(forgeignorePath, existingContent.trimEnd() + '\n\n' + guardHeader + '\n' + stackshiftContent, 'utf-8')
-    process.stderr.write('  .forgeignore: StackShift exclusions appended.\n')
-  } else {
-    process.stderr.write('  .forgeignore: StackShift exclusions already present, skipped.\n')
-  }
+  // Non-template existing file → merge line-by-line to avoid duplicates
+  const merged = mergeForgeignoreLines(existingContent, stackshiftContent)
+  writeFileSync(forgeignorePath, existingContent.trimEnd() + '\n\n' + merged, 'utf-8')
+  process.stderr.write('  .forgeignore: StackShift exclusions merged (deduplicated).\n')
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -707,13 +730,14 @@ function main() {
   }
 
   // Discover component directories and design standards.
-  // In patch mode we preserve existing designStandards entries verbatim, but
-  // still auto-register any newly-added design/standards/*.md files.
-  // Use effective isStackShift: synthesis result OR forced true by --theme stackshift (G-2/G-3)
+  // Always merge existing designStandards to preserve previously registered
+  // entries (e.g. stackshift-ui from a prior --theme stackshift scan).
+  // discovered provides new/updated entries; existing.designStandards preserves
+  // everything else. This ensures rescans never delete standards.
   const effectiveIsStackShift = s.isStackShift || (theme?._theme === 'stackshift')
   const componentDirs = discoverComponentDirectories()
   const discovered = findDesignStandards(effectiveIsStackShift)
-  const designStandards = PATCH_MODE && existing.designStandards
+  const designStandards = existing.designStandards
     ? { ...discovered, ...existing.designStandards }
     : discovered
 
@@ -742,9 +766,11 @@ function main() {
     designStandards,  // object keyed by standard name → relative path
     patterns: {
       ...(existing.patterns ?? {}),
-      spacing: s.spacing,
-      typography: s.typography,
-      conventions: s.conventions ?? [],
+      ...(s.spacing && s.spacing !== 'unknown' ? { spacing: s.spacing } : {}),
+      ...(s.typography && s.typography !== 'unknown' ? { typography: s.typography } : {}),
+      ...(Array.isArray(s.conventions) && s.conventions.length > 0
+        ? { conventions: s.conventions }
+        : {}),
     },
   }
 

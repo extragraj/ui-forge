@@ -4,7 +4,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org)
 [![Skills Compatible](https://img.shields.io/badge/skills-compatible-blue)](https://github.com/vercel/skills-cli)
 
-> **Version** 0.2.8
+> **Version** 0.2.9
 
 Next.js component generator for Codex CLI, Claude Code, and other AI coding assistants. Converts HTML, TSX, images, and JSON reference materials into production-ready components that match your project's existing design system — using your actual component libraries, Tailwind tokens, and coding conventions.
 
@@ -309,7 +309,7 @@ Themes are **gap-fill only** — scan findings always win. A theme fills `compon
 **StackShift Theme Specific Behavior:** `--theme stackshift` does the following beyond gap-fill:
 - Forces `isStackShift: true` in `design-arch.json` so the built-in `stackshift-ui` design standards are always injected at forge time — even on empty codebases, with `--quick`, or when the Claude CLI is unavailable.
 - Copies `references/standards/stackshift-ui/` to `design/standards/stackshift-ui/` (project-local, versionable, editable) and records the project-local path under `designStandards["stackshift-ui"]`.
-- Copies general built-in standards (`nextjs-image.md`, `sample-standard.md`) to `design/standards/` and auto-registers them.
+- Copies general built-in standard (`nextjs-image.md`) to `design/standards/` and auto-registers it. `sample-standard.md` is a template for users to copy, not an active standard — it remains in `references/standards/` as documentation only.
 - Handles `.forgeignore` with three-way logic: creates from StackShift template if missing, overwrites if it's a UI Forge template, or appends StackShift exclusions to an existing custom file.
 - Preserves the `_paired` mirror block in `design-arch.json` on re-scan so StackShift paired-mode markers are never lost.
 
@@ -440,6 +440,7 @@ Full release notes are in [`change-logs/`](./change-logs/).
 
 | Version | Date | Notes |
 |---------|------|-------|
+| [0.2.9](./change-logs/0-2-9-issues-analysis-fixes.md) | 2026-05-08 | Issues analysis fixes — StackShift .forgeignore now merges line-by-line with deduplication instead of appending; sample-standard.md no longer copied to project (template only); designStandards always merged on rescan (never deleted); patterns preserved when AI synthesis unavailable; duplicate anti-slop guardrails removed (single source of truth in prompt-patterns.md); design standards now sorted by task relevance with RULE extraction in [REF] descriptions; FORGE NOTES compliance block added. |
 | [0.2.8](./change-logs/0-2-8-forgeignore-standards-and-scan-fixes.md) | 2026-05-06 | .forgeignore, standards copy & scan fixes — `cli.js install` writes correct default template; `--theme stackshift` handles .forgeignore with create/overwrite/append logic; removed obsolete variant-router linking; copies built-in standards (stackshift-ui, nextjs-image, sample-standard) to project-local `design/standards/`; preserves `_paired` block on re-scan; documented naming distinction between `stackshift-ui` and `stackshift-section-variants`. |
 | [0.2.7E](./change-logs/0-2-7E-documentation-restructure-and-clarity.md) | 2026-05-06 | Documentation restructure & cross-platform clarity — reorganized README with clearer installation flow, new Advanced section for manual invocation, moved Page Conversion to Features subsection; condensed CLAUDE.md from 306 to 109 lines (converted architecture to tables, removed redundant examples); updated SKILL.md to clarify cross-platform support (Cursor, Codex, etc.) and marked Claude Design features as Claude.ai-exclusive; fixed detect.js symlink-aware skill-root resolution. |
 | [0.2.7D](./change-logs/0-2-7D-missing-features-or-enhancements.md) | 2026-05-05 | Missing features — documented modification/fix mode for rebuild use cases, added mechanical anti-slop fidelity checklist against reference HTML, documented +IMAGE fallback requirement for vision-provided screenshots, created built-in Next.js + Sanity image rendering standard. |
