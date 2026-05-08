@@ -4,7 +4,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org)
 [![Skills Compatible](https://img.shields.io/badge/skills-compatible-blue)](https://github.com/vercel/skills-cli)
 
-> **Version** 0.2.9
+> **Version** 0.3.0
 
 Next.js component generator for Codex CLI, Claude Code, and other AI coding assistants. Converts HTML, TSX, images, and JSON reference materials into production-ready components that match your project's existing design system — using your actual component libraries, Tailwind tokens, and coding conventions.
 
@@ -312,6 +312,17 @@ Themes are **gap-fill only** — scan findings always win. A theme fills `compon
 - Copies general built-in standard (`nextjs-image.md`) to `design/standards/` and auto-registers it. `sample-standard.md` is a template for users to copy, not an active standard — it remains in `references/standards/` as documentation only.
 - Handles `.forgeignore` with three-way logic: creates from StackShift template if missing, overwrites if it's a UI Forge template, or appends StackShift exclusions to an existing custom file.
 - Preserves the `_paired` mirror block in `design-arch.json` on re-scan so StackShift paired-mode markers are never lost.
+- **Supports `--theme-override`**: bootstrap a project's `globals.css` and `tailwind.config.*` with default StackShift CSS variable tokens, Inter font import, and full `theme.extend` block before scanning. The scan then picks up the overridden files naturally.
+
+```bash
+# Bootstrap globals.css + tailwind.config.ts with StackShift defaults, then scan
+node "$SKILL_ROOT/scripts/cli.js" scan --theme stackshift --theme-override
+
+# Skip .bak backup creation
+node "$SKILL_ROOT/scripts/cli.js" scan --theme stackshift --theme-override --no-backup
+```
+
+> ⚠️ `--theme-override` modifies project files on disk. `.bak` backup files are created by default. Running again on already-overridden files is idempotent. Non-Google-Fonts `@import` lines are preserved.
 
 See [Built-in Themes](./themes/README.md) for the full preset list and merge rules.
 
@@ -433,6 +444,14 @@ Exit `1` on violations (missing default export, disallowed named exports, requir
 | `--ignore <file>` | Load an additional ignore file (repeatable) |
 | `--no-default-ignore` | Skip the built-in base ignore list |
 | `--theme <name>` | Seed `design-arch.json` from `themes/<name>.json` (gap-fill only). Available: `shadcn`, `mantine`, `plain-tailwind`, `stackshift`. |
+| `--theme-override` | Surgically replace Google Fonts `@import`, `@layer base` block, and `theme.extend` section in project files **before** scan reads them. Requires `--theme stackshift`. Creates `.bak` backup files by default. |
+| `--no-backup` | Skip `.bak` backup file creation when using `--theme-override`. |
+
+**Forge Script Flags** (`scripts/invoke.js` — additional):
+
+| Flag | Description |
+|------|-------------|
+| `--no-design-authority` | Strip the design authority block (arch context + standards) from forge output. The AI follows reference styling instead. Requires at least one `--refs` file. Refused in paired (StackShift) mode. Note: design standards are also stripped (they are part of project authority). |
 
 ## Changelog
 
@@ -440,6 +459,7 @@ Full release notes are in [`change-logs/`](./change-logs/).
 
 | Version | Date | Notes |
 |---------|------|-------|
+| [0.3.0](./change-logs/0-3-0-theme-override-and-no-design-authority.md) | 2026-05-08 | `--theme-override` (scan, stackshift-only): surgically replaces Google Fonts `@import`, `@layer base`, and `theme.extend` in project files before scan using a brace-counted parser; mandatory `.bak` backups, idempotent, preserves non-font `@import` lines. `themeOverride` data added to `themes/stackshift.json`. `--no-design-authority` (forge): strips design authority + standards from forge output; AI follows reference styling; refused in paired mode; requires `--refs`. 73 tests. |
 | [0.2.9](./change-logs/0-2-9-issues-analysis-fixes.md) | 2026-05-08 | Issues analysis fixes — StackShift .forgeignore now merges line-by-line with deduplication instead of appending; sample-standard.md no longer copied to project (template only); designStandards always merged on rescan (never deleted); patterns preserved when AI synthesis unavailable; duplicate anti-slop guardrails removed (single source of truth in prompt-patterns.md); design standards now sorted by task relevance with RULE extraction in [REF] descriptions; FORGE NOTES compliance block added. |
 | [0.2.8](./change-logs/0-2-8-forgeignore-standards-and-scan-fixes.md) | 2026-05-06 | .forgeignore, standards copy & scan fixes — `cli.js install` writes correct default template; `--theme stackshift` handles .forgeignore with create/overwrite/append logic; removed obsolete variant-router linking; copies built-in standards (stackshift-ui, nextjs-image, sample-standard) to project-local `design/standards/`; preserves `_paired` block on re-scan; documented naming distinction between `stackshift-ui` and `stackshift-section-variants`. |
 | [0.2.7E](./change-logs/0-2-7E-documentation-restructure-and-clarity.md) | 2026-05-06 | Documentation restructure & cross-platform clarity — reorganized README with clearer installation flow, new Advanced section for manual invocation, moved Page Conversion to Features subsection; condensed CLAUDE.md from 306 to 109 lines (converted architecture to tables, removed redundant examples); updated SKILL.md to clarify cross-platform support (Cursor, Codex, etc.) and marked Claude Design features as Claude.ai-exclusive; fixed detect.js symlink-aware skill-root resolution. |

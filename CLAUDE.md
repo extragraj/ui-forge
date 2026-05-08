@@ -67,6 +67,14 @@ Each signal requires specific FORGE NOTES sub-blocks documenting decisions. To e
 
 Set `_useBuiltins: false` to opt out of built-in standard fallbacks.
 
+### Theme override (`--theme-override` flag on `scan.js`)
+
+Surgically replaces three sections in project files **before** the scan reads them: Google Fonts `@import` in `globals.css`, `@layer base` block in `globals.css`, and `theme.extend` section in `tailwind.config.*`. Requires `--theme stackshift` (the `themeOverride` data lives in `themes/stackshift.json`). Creates `.bak` backups by default; `--no-backup` skips them. Replacement uses a brace-counting parser (not regex) to handle nested objects and is idempotent. Only Google-Fonts-style `@import url(...)` lines are replaced; other `@import` lines are preserved.
+
+### `--no-design-authority` flag (on `invoke.js`)
+
+Strips the DESIGN AUTHORITY block (arch context + design standards) from forge output. The AI follows reference styling instead. Requires at least one `--refs` file. Refused in paired (StackShift) mode. Note: design standards are also stripped — they are considered part of project design authority.
+
 ### File roles (pre-processing)
 
 Refs are classified and transformed before injection:

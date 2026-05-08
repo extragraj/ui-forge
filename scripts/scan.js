@@ -14,8 +14,11 @@
  *   node ${CLAUDE_SKILL_DIR}/scripts/scan.js --no-default-ignore        (skip the built-in base ignore list)
  *   node ${CLAUDE_SKILL_DIR}/scripts/scan.js --theme <name>             (seed baseline from themes/<name>.json; fills gaps only)
  *   node ${CLAUDE_SKILL_DIR}/scripts/scan.js --schema-v4                (emit v4 schema with darkColorTokens; version-gated)
+ *   node ${CLAUDE_SKILL_DIR}/scripts/scan.js --theme stackshift --theme-override  (surgically replace font import, @layer base, and theme.extend in project files before scan)
+ *   node ${CLAUDE_SKILL_DIR}/scripts/scan.js --theme stackshift --theme-override --no-backup  (skip .bak file creation)
  *
  * Available themes: shadcn, mantine, plain-tailwind, stackshift.
+ * Themes with themeOverride data (usable with --theme-override): stackshift.
  *
  * Ignore precedence (last wins on conflict):
  *   built-in base → .gitignore → .agentic.ignore → .claude.ignore → .forgeignore → --ignore <file>
@@ -54,6 +57,8 @@ const NO_DEFAULT_IGNORE = flag('--no-default-ignore')
 const EXTRA_IGNORE_FILES = flagValAll('--ignore')
 const THEME_NAME = flagVal('--theme')
 const SCHEMA_V4 = flag('--schema-v4')
+const THEME_OVERRIDE = flag('--theme-override')
+const NO_BACKUP = flag('--no-backup')
 const OUT_DIR = join(PROJECT_ROOT, 'design')
 const OUT_FILE = join(OUT_DIR, 'design-arch.json')
 const COMPONENT_USAGE_FILE = join(OUT_DIR, 'component-usage.json')
@@ -668,6 +673,155 @@ function handleStackshiftForgeignore() {
   process.stderr.write('  .forgeignore: StackShift exclusions merged (deduplicated).\n')
 }
 
+// ─── Theme override (--theme-override) ───────────────────────────────────────
+
+// Walk braces in src starting from openIdx (which must point AT `{`).
+// Skips braces inside line comments, block comments, and string literals.
+// Returns the index OF the matching `}` (not one past it).
+function matchBrace(src, openIdx) {
+  let depth = 0
+  let i = openIdx
+  while (i < src.length) {
+    const ch = src[i]
+    if (ch === '/' && src[i + 1] === '/') {
+      const nl = src.indexOf('\n', i)
+      i = nl === -1 ? src.length : nl + 1
+    } else if (ch === '/' && src[i + 1] === '*') {
+      const end = src.indexOf('*/', i + 2)
+      if (end === -1) throw new Error('Unclosed block comment — cannot safely walk braces')
+      i = end + 2
+    } else if (ch === '"') {
+      i++
+      while (i < src.length && src[i] !== '"') { if (src[i] === '\\') i++; i++ }
+      i++
+    } else if (ch === "'") {
+      i++
+      while (i < src.length && src[i] !== "'") { if (src[i] === '\\') i++; i++ }
+      i++
+    } else if (ch === '`') {
+      i++
+      while (i < src.length && src[i] !== '`') { if (src[i] === '\\') i++; i++ }
+      i++
+    } else if (ch === '{') {
+      depth++; i++
+    } else if (ch === '}') {
+      depth--
+      if (depth === 0) return i
+      i++
+    } else {
+      i++
+    }
+  }
+  throw new Error('Unbalanced braces — cannot safely modify file')
+}
+
+// Surgically replace the @layer base { ... } block in CSS content.
+// If no block exists, inserts replacement after the last @tailwind directive (or at top).
+function replaceLayerBase(css, replacement) {
+  const startMatch = css.match(/@layer\s+base\s*\{/)
+  if (!startMatch) {
+    const twMatches = [...css.matchAll(/@tailwind\s+\w+\s*;/g)]
+    const lastTw = twMatches.pop()
+    if (lastTw) {
+      const i = lastTw.index + lastTw[0].length
+      return css.slice(0, i) + '\n\n' + replacement + css.slice(i)
+    }
+    return replacement + '\n\n' + css
+  }
+  const openIdx = startMatch.index + startMatch[0].length - 1
+  const closeIdx = matchBrace(css, openIdx)
+  return css.slice(0, startMatch.index) + replacement + css.slice(closeIdx + 1)
+}
+
+// Surgically replace the body of extend: { ... } inside theme: { ... }.
+// Searches only within the theme: {} body to avoid false matches.
+function replaceTailwindExtend(src, tailwindExtendBody) {
+  const themeMatch = src.match(/\btheme\s*:\s*\{/)
+  if (!themeMatch) throw new Error('No `theme: {` block found in tailwind.config — refusing to modify')
+  const themeOpen = themeMatch.index + themeMatch[0].length - 1
+  const themeClose = matchBrace(src, themeOpen)
+  const themeBody = src.slice(themeOpen + 1, themeClose)
+  const extMatch = themeBody.match(/\bextend\s*:\s*\{/)
+  if (!extMatch) throw new Error('No `extend: {` block inside `theme: {}` — refusing to modify')
+  const extRelOpen = extMatch.index + extMatch[0].length - 1
+  const extAbsOpen = themeOpen + 1 + extRelOpen
+  const extAbsClose = matchBrace(src, extAbsOpen)
+  return src.slice(0, extAbsOpen + 1) + '\n' + tailwindExtendBody + '\n  ' + src.slice(extAbsClose)
+}
+
+// Pre-scan: surgically apply theme override values to project files on disk.
+// Called before readTailwindConfig() and readGlobalCss() so the scan picks up the changes.
+function applyThemeOverride(theme) {
+  const override = theme.themeOverride
+
+  // ── globals.css ──────────────────────────────────────────────────────────────
+  const cssCandidates = [
+    'styles/globals.css', 'styles/global.css', 'app/globals.css',
+    'src/styles/globals.css', 'src/app/globals.css',
+  ]
+  const cssEntry = (() => {
+    for (const n of cssCandidates) {
+      const p = join(PROJECT_ROOT, n)
+      if (existsSync(p)) return { path: p, rel: n }
+    }
+    return null
+  })()
+
+  if (cssEntry && override.globalCss) {
+    let css = readFileSync(cssEntry.path, 'utf-8')
+    if (!NO_BACKUP) {
+      writeFileSync(cssEntry.path + '.bak', css, 'utf-8')
+      process.stderr.write(`  theme override: backup → ${cssEntry.rel}.bak\n`)
+    }
+
+    // Replace Google Fonts @import (preserve non-font @imports)
+    const fontImportRe = /@import\s+url\((['"]?)https?:\/\/fonts\.(googleapis|gstatic)\.com\/[^)]+\1\)\s*;?/g
+    const fontMatches = [...css.matchAll(fontImportRe)]
+    if (fontMatches.length > 0) {
+      let replaced = false
+      css = css.replace(fontImportRe, () => {
+        if (!replaced) { replaced = true; return override.globalCss.fontImport }
+        return ''
+      })
+      process.stderr.write(`  theme override: font import replaced in ${cssEntry.rel}\n`)
+    } else {
+      css = override.globalCss.fontImport + '\n' + css
+      process.stderr.write(`  theme override: font import prepended to ${cssEntry.rel}\n`)
+    }
+
+    // Replace @layer base block
+    css = replaceLayerBase(css, override.globalCss.layerBase)
+    process.stderr.write(`  theme override: @layer base replaced in ${cssEntry.rel}\n`)
+
+    writeFileSync(cssEntry.path, css, 'utf-8')
+  } else if (!cssEntry) {
+    process.stderr.write('  theme override: warning — globals.css not found, skipping CSS override\n')
+  }
+
+  // ── tailwind.config.* ────────────────────────────────────────────────────────
+  const twCandidates = ['tailwind.config.ts', 'tailwind.config.js', 'tailwind.config.mjs']
+  const twEntry = (() => {
+    for (const n of twCandidates) {
+      const p = join(PROJECT_ROOT, n)
+      if (existsSync(p)) return { path: p, rel: n }
+    }
+    return null
+  })()
+
+  if (twEntry && override.tailwindExtend) {
+    let src = readFileSync(twEntry.path, 'utf-8')
+    if (!NO_BACKUP) {
+      writeFileSync(twEntry.path + '.bak', src, 'utf-8')
+      process.stderr.write(`  theme override: backup → ${twEntry.rel}.bak\n`)
+    }
+    src = replaceTailwindExtend(src, override.tailwindExtend)
+    writeFileSync(twEntry.path, src, 'utf-8')
+    process.stderr.write(`  theme override: theme.extend replaced in ${twEntry.rel}\n`)
+  } else if (!twEntry) {
+    process.stderr.write('  theme override: warning — tailwind.config.* not found, skipping tailwind override\n')
+  }
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 function main() {
@@ -679,6 +833,21 @@ function main() {
   // Issue 2: Handle .forgeignore when --theme stackshift is used
   if (THEME_NAME === 'stackshift') {
     handleStackshiftForgeignore()
+  }
+
+  // --theme-override: surgically replace font import, @layer base, and theme.extend
+  // in project files before the scan reads them. Requires --theme with themeOverride data.
+  if (THEME_OVERRIDE) {
+    if (!THEME_NAME) {
+      process.stderr.write('Error: --theme-override requires --theme to be specified.\n')
+      process.exit(1)
+    }
+    if (!theme?.themeOverride) {
+      process.stderr.write(`Error: theme "${THEME_NAME}" has no themeOverride data defined. Cannot apply --theme-override.\n`)
+      process.exit(1)
+    }
+    process.stderr.write(`  applying theme override (${THEME_NAME})...\n`)
+    applyThemeOverride(theme)
   }
 
   const ignore = loadIgnorePatterns()

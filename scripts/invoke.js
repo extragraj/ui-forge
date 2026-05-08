@@ -103,7 +103,7 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 }
 
-function generatePreviewHtml({ task, signals, archCtx, refs, paired, standards }) {
+function generatePreviewHtml({ task, signals, archCtx, refs, paired, standards, noDesignAuthority }) {
   const sig = `${signals.primary}${signals.modifiers.length ? ' +' + signals.modifiers.join(' +') : ''}`
   const css = [
     'body{font:14px/1.6 monospace;max-width:960px;margin:2em auto;padding:1em;background:#0d1117;color:#c9d1d9}',
@@ -131,7 +131,7 @@ function generatePreviewHtml({ task, signals, archCtx, refs, paired, standards }
     `${paired ? `<p class="paired">Paired mode: stackshift ${escapeHtml(paired.version)}</p>` : ''}`,
     `<h2>Signal</h2><span class="badge">${escapeHtml(sig)}</span>`,
     `<h2>Task</h2><pre>${escapeHtml(task)}</pre>`,
-    `<h2>Design Authority</h2><pre>${escapeHtml(archCtx)}</pre>`,
+    `<h2>Design Authority</h2>${noDesignAuthority ? '<pre>NONE — following reference styling</pre>' : `<pre>${escapeHtml(archCtx)}</pre>`}`,
     stdBlocks,
     refBlocks,
     '</body></html>',
@@ -737,7 +737,7 @@ function appendStandards(lines, standardsResult, isLite = false, task = '') {
   }
 }
 
-function buildSectionContext({ task, archCtx, signals, standards, addendum, output, diffSource, verify }) {
+function buildSectionContext({ task, archCtx, signals, standards, addendum, output, diffSource, verify, noDesignAuthority }) {
   const { byRole } = signals
   const mainRef = byRole.reference?.[0]
   const extraRefs = (byRole.reference ?? []).slice(1)
@@ -756,9 +756,17 @@ function buildSectionContext({ task, archCtx, signals, standards, addendum, outp
   lines.push('TASK')
   lines.push(task)
   lines.push('')
-  lines.push('DESIGN AUTHORITY: design/design-arch.json')
-  lines.push(archCtx)
-  appendStandards(lines, standards, signals.isLite, task)
+  if (noDesignAuthority) {
+    lines.push('DESIGN AUTHORITY: NONE — following reference styling')
+    lines.push('The reference file(s) define the visual design. Map colors, spacing, typography,')
+    lines.push('and layout directly from the reference. Do NOT consult design-arch.json or any')
+    lines.push('design standards. Preserve the reference\'s styling as closely as possible.')
+    lines.push('If multiple refs are provided, use the first (primary) reference for styling decisions.')
+  } else {
+    lines.push('DESIGN AUTHORITY: design/design-arch.json')
+    lines.push(archCtx)
+    appendStandards(lines, standards, signals.isLite, task)
+  }
 
   if (mainRef) {
     lines.push('')
@@ -841,7 +849,7 @@ function buildSectionContext({ task, archCtx, signals, standards, addendum, outp
   return lines.join('\n')
 }
 
-function buildVariantContext({ task, archCtx, signals, standards, addendum, output, mode, paired, verify }) {
+function buildVariantContext({ task, archCtx, signals, standards, addendum, output, mode, paired, verify, noDesignAuthority }) {
   const { byRole } = signals
 
   // Under CONVERT_VARIANT, the interface file is classified as 'config' by loadRefs
@@ -871,8 +879,8 @@ function buildVariantContext({ task, archCtx, signals, standards, addendum, outp
   lines.push(task)
   lines.push('')
   
-  // Standards at highest priority
-  appendStandards(lines, standards, signals.isLite)
+  // Standards at highest priority (skipped when noDesignAuthority)
+  if (!noDesignAuthority) appendStandards(lines, standards, signals.isLite)
 
   // Props interface — the contract
   if (interfaceRef) {
@@ -885,8 +893,16 @@ function buildVariantContext({ task, archCtx, signals, standards, addendum, outp
   }
 
   lines.push('')
-  lines.push('DESIGN AUTHORITY: design/design-arch.json')
-  lines.push(archCtx)
+  if (noDesignAuthority) {
+    lines.push('DESIGN AUTHORITY: NONE — following reference styling')
+    lines.push('The reference file(s) define the visual design. Map colors, spacing, typography,')
+    lines.push('and layout directly from the reference. Do NOT consult design-arch.json or any')
+    lines.push('design standards. Preserve the reference\'s styling as closely as possible.')
+    lines.push('If multiple refs are provided, use the first (primary) reference for styling decisions.')
+  } else {
+    lines.push('DESIGN AUTHORITY: design/design-arch.json')
+    lines.push(archCtx)
+  }
 
   if (configRef) {
     lines.push('')
@@ -939,15 +955,19 @@ function buildVariantContext({ task, archCtx, signals, standards, addendum, outp
   return lines.join('\n')
 }
 
-function buildPageStage1Context({ task, mainRef, archCtx }) {
+function buildPageStage1Context({ task, mainRef, archCtx, noDesignAuthority }) {
   const lines = []
   lines.push('=== UI FORGE — PAGE DECOMPOSITION (Stage 1) ===')
   lines.push('')
   lines.push('TASK')
   lines.push(task)
   lines.push('')
-  lines.push('DESIGN AUTHORITY: design/design-arch.json (for existingProjectSection detection)')
-  lines.push(archCtx)
+  if (noDesignAuthority) {
+    lines.push('DESIGN AUTHORITY: NONE — following reference styling (existingProjectSection detection: use page content only)')
+  } else {
+    lines.push('DESIGN AUTHORITY: design/design-arch.json (for existingProjectSection detection)')
+    lines.push(archCtx)
+  }
   lines.push('')
   lines.push('PAGE CONTENT')
   lines.push(mainRef.rawLines.join('\n'))
@@ -978,7 +998,7 @@ function buildPageStage1Context({ task, mainRef, archCtx }) {
   return lines.join('\n')
 }
 
-function buildPageStage2Context({ archCtx, signals, standards, addendum, plan, mainRef, outputDir, isLite }) {
+function buildPageStage2Context({ archCtx, signals, standards, addendum, plan, mainRef, outputDir, isLite, noDesignAuthority }) {
   const todo = plan.sections.filter(s => !s.existingProjectSection)
   const skipped = plan.sections.length - todo.length
 
@@ -986,9 +1006,17 @@ function buildPageStage2Context({ archCtx, signals, standards, addendum, plan, m
   lines.push('=== UI FORGE — PAGE GENERATION (Stage 2) ===')
   lines.push(`${todo.length} section(s) to generate${skipped ? `, ${skipped} skipped (existingProjectSection: true)` : ''}`)
   lines.push('')
-  lines.push('DESIGN AUTHORITY: design/design-arch.json')
-  lines.push(archCtx)
-  appendStandards(lines, standards, isLite)
+  if (noDesignAuthority) {
+    lines.push('DESIGN AUTHORITY: NONE — following reference styling')
+    lines.push('The reference file(s) define the visual design. Map colors, spacing, typography,')
+    lines.push('and layout directly from the reference. Do NOT consult design-arch.json or any')
+    lines.push('design standards. Preserve the reference\'s styling as closely as possible.')
+    lines.push('If multiple refs are provided, use the first (primary) reference for styling decisions.')
+  } else {
+    lines.push('DESIGN AUTHORITY: design/design-arch.json')
+    lines.push(archCtx)
+    appendStandards(lines, standards, isLite)
+  }
   lines.push('')
   lines.push('GENERATION INSTRUCTIONS')
   lines.push(addendum)
@@ -1099,6 +1127,9 @@ ui-forge — Next.js component generator for Agentic Model
              generating context. CONVERT_VARIANT only. Fails fast on malformed contract.
   --no-default-standards  Skip built-in fallback standards (arch + project only)
   --verify-standards  Run post-generation design standards compliance check
+  --no-design-authority  Strip design authority from forge output; AI follows reference
+             styling instead. Requires at least one --refs file. Refused in paired mode.
+             Note: also strips design standards (both are part of project design authority).
   --config   Load all params from JSON file
   --rescan   Re-run scan.js before generating
   --replan   Force Stage 1 page plan regeneration
@@ -1112,16 +1143,18 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
   if (typeof params.refs === 'string')
     params.refs = params.refs.split(',').map(s => s.trim())
 
-  for (const flag of ['rescan', 'replan', 'a11y', 'creative', 'no-default-standards', 'preview', 'verify', 'validate-input', 'lite'])
+  for (const flag of ['rescan', 'replan', 'a11y', 'creative', 'no-default-standards', 'preview', 'verify', 'validate-input', 'lite', 'no-design-authority'])
     if (params[flag] === 'true') params[flag] = true
   // Normalise kebab-case flags → camelCase for internal use
   if (params['no-default-standards']) params.noDefaultStandards = true
   if (params['verify-standards']) params.verifyStandards = true
+  if (params['no-design-authority']) params.noDesignAuthority = true
   const preview = params.preview === true
   const verifyMode = params.verify === true
   const validateInput = params['validate-input'] === true
   const isLite = params.lite === true
   const verifyStandards = params.verifyStandards === true
+  const noDesignAuthority = params.noDesignAuthority === true
 
   if (validateInput && !params.task && !params.refs) {
     process.stderr.write('ui-forge error: --validate-input requires --refs <interface-file> (and optionally --signal CONVERT_VARIANT)\n')
@@ -1198,6 +1231,18 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
   if (paired)
     process.stderr.write(`ui-forge: paired-mode detected (stackshift ${paired.version})\n`)
 
+  // --no-design-authority validation
+  if (noDesignAuthority) {
+    if (!classifiedRefs.length) {
+      process.stderr.write('Error: --no-design-authority requires at least one --refs file.\n')
+      process.exit(1)
+    }
+    if (paired) {
+      process.stderr.write('Error: --no-design-authority is refused in paired (StackShift) mode — design authority is always required.\n')
+      process.exit(1)
+    }
+  }
+
   // +CREATIVE refusal — contract/page always wins over creative latitude
   if (signals.modifiers.includes('CREATIVE')) {
     if (signals.primary === 'CONVERT_VARIANT') {
@@ -1259,12 +1304,13 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
       mode,
       paired,
       verify: verifyMode,
+      noDesignAuthority,
     })
     process.stdout.write(variantCtx + '\n')
 
     if (preview) {
       const previewPath = join(PROJECT_ROOT, 'forge-preview.html')
-      writeFileSync(previewPath, generatePreviewHtml({ task: params.task, signals, archCtx, refs: classifiedRefs, paired, standards }), 'utf-8')
+      writeFileSync(previewPath, generatePreviewHtml({ task: params.task, signals, archCtx, refs: classifiedRefs, paired, standards, noDesignAuthority }), 'utf-8')
       process.stdout.write(`ui-forge: preview written → ${previewPath}\n`)
     }
     return
@@ -1317,12 +1363,12 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
       const outputDir = params.output ? dirname(resolve(PROJECT_ROOT, params.output)) : null
 
       process.stdout.write(buildPageStage2Context({
-        archCtx, signals, standards, addendum, plan, mainRef, outputDir, isLite
+        archCtx, signals, standards, addendum, plan, mainRef, outputDir, isLite, noDesignAuthority
       }) + '\n')
 
       if (preview) {
         const previewPath = join(PROJECT_ROOT, 'forge-preview.html')
-        writeFileSync(previewPath, generatePreviewHtml({ task: params.task, signals, archCtx, refs: classifiedRefs, paired, standards }), 'utf-8')
+        writeFileSync(previewPath, generatePreviewHtml({ task: params.task, signals, archCtx, refs: classifiedRefs, paired, standards, noDesignAuthority }), 'utf-8')
         process.stdout.write(`ui-forge: preview written → ${previewPath}\n`)
       }
       return
@@ -1330,7 +1376,7 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
 
     // Stage 1 — no plan yet
     process.stderr.write('ui-forge: Stage 1 — outputting page decomposition context...\n')
-    process.stdout.write(buildPageStage1Context({ task: params.task, mainRef, archCtx: archToContext(arch, true) }) + '\n')
+    process.stdout.write(buildPageStage1Context({ task: params.task, mainRef, archCtx: archToContext(arch, true), noDesignAuthority }) + '\n')
     return
   }
 
@@ -1347,11 +1393,12 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
     output: params.output,
     diffSource,
     verify: verifyMode,
+    noDesignAuthority,
   }) + '\n')
 
   if (preview) {
     const previewPath = join(PROJECT_ROOT, 'forge-preview.html')
-    writeFileSync(previewPath, generatePreviewHtml({ task: params.task, signals, archCtx, refs: classifiedRefs, paired, standards }), 'utf-8')
+    writeFileSync(previewPath, generatePreviewHtml({ task: params.task, signals, archCtx, refs: classifiedRefs, paired, standards, noDesignAuthority }), 'utf-8')
     process.stdout.write(`ui-forge: preview written → ${previewPath}\n`)
   }
 }

@@ -63,7 +63,7 @@ function install() {
     {
       file: 'forge-scan.md',
       description: 'Scan the project and create design/design-arch.json',
-      hint: '[--theme shadcn|mantine|plain-tailwind|stackshift] [--schema-v4] [--quick]',
+      hint: '[--theme shadcn|mantine|plain-tailwind|stackshift] [--theme-override] [--no-backup] [--schema-v4] [--quick]',
       body: 'Run the UI Forge project scanner.\n\n' + run('scan.js'),
     },
     {

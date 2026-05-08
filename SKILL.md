@@ -1,6 +1,6 @@
 ---
 name: ui-forge
-version: 0.2.9
+version: 0.3.0
 description: 'Production Next.js component generator. Converts HTML, TSX, images, and JSON into project-compliant components using your design system. Triggers on component creation, HTML/TSX conversion, page generation, image-to-component tasks, or any frontend code generation request. Requires a one-time scan to build design/design-arch.json.'
 ---
 
@@ -55,7 +55,7 @@ node .claude/skills/ui-forge/scripts/cli.js install
 ```
 
 Scans the project and creates `design/design-arch.json`. Accepts optional flags:
-`--theme shadcn|mantine|plain-tailwind|stackshift`, `--schema-v4`, `--quick`.
+`--theme shadcn|mantine|plain-tailwind|stackshift|stackshift`, `--theme-override`, `--no-backup`, `--schema-v4`, `--quick`.
 
 `--theme stackshift` is the correct flag for StackShift projects. It forces `isStackShift: true` in `design-arch.json` (ensuring the built-in `stackshift-ui` standards are injected at forge time regardless of codebase maturity), records `designStandards["stackshift-ui"]` pointing at the built-in standards directory, and creates `design/standards/` for project-level overrides.
 
@@ -120,7 +120,7 @@ Writes `design/claude-design-bundle/` — a folder with `README.md`, `tokens.jso
 /forge --handoff <url> --output ./components/X.tsx             # 6. generate component
 ```
 
-**Flags:**
+**Forge flags:**
 
 | Flag       | Description                                        |
 |------------|----------------------------------------------------|
@@ -129,6 +129,15 @@ Writes `design/claude-design-bundle/` — a folder with `README.md`, `tokens.jso
 | `--output` | Target output path (included in context)           |
 | `--rescan` | Re-run scan.js before generating                   |
 | `--replan` | Force Stage 1 page plan regeneration               |
+| `--no-design-authority` | Strip design authority from output; AI follows reference styling instead. Requires `--refs`. Refused in paired (StackShift) mode. |
+
+**Scan flags:**
+
+| Flag       | Description                                        |
+|------------|----------------------------------------------------|
+| `--theme <name>` | Seed baseline from a theme preset (`shadcn`, `mantine`, `plain-tailwind`, `stackshift`) |
+| `--theme-override` | Surgically replace `@import` font, `@layer base`, and `theme.extend` in project files before scan. Requires `--theme stackshift`. Creates `.bak` backup files by default. |
+| `--no-backup` | Skip `.bak` file creation when using `--theme-override` |
 
 ### Other CLIs / Bash (Codex, terminal, CI)
 
