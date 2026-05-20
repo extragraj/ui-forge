@@ -75,6 +75,70 @@ function findGlobalCssPath() {
   return null
 }
 
+const FULL_INLINE_MAX_LINES = 40  // standards at or under this are inlined as-is
+const FULL_INLINE_BLOCK_MAX = 35  // max lines for a truncated block
+
+// Extract the most important block from a long standard.
+// Priority: preamble + ## Rule/Rules section; else preamble + first ## section.
+// Greedily adds more sections until FULL_INLINE_BLOCK_MAX, then appends truncation notice.
+function extractImportantBlock(content, relPath) {
+  const allLines = content.split('\n')
+  if (allLines.length <= FULL_INLINE_MAX_LINES) return content
+
+  // Split into sections: sections[0] = preamble (# title + intro before first ##)
+  const sections = []
+  let cur = { heading: null, lines: [] }
+  for (const line of allLines) {
+    if (line.startsWith('## ')) {
+      sections.push(cur)
+      cur = { heading: line, lines: [] }
+    } else {
+      cur.lines.push(line)
+    }
+  }
+  sections.push(cur)
+
+  const result = []
+
+  // Always include preamble
+  for (const l of sections[0].lines) result.push(l)
+
+  if (sections.length > 1) {
+    // Prioritise ## Rule/Rules; fall back to first ## section
+    const ruleIdx = sections.findIndex((s, i) => i > 0 && /^## Rules?\b/i.test(s.heading ?? ''))
+    const priority = ruleIdx > 0 ? ruleIdx : 1
+
+    // Build visit order: priority section first, then the rest
+    const order = [priority]
+    for (let i = 1; i < sections.length; i++) {
+      if (i !== priority) order.push(i)
+    }
+
+    for (const idx of order) {
+      if (result.length >= FULL_INLINE_BLOCK_MAX) break
+      const sec = sections[idx]
+      if (!sec) continue
+      const secLines = sec.heading ? [sec.heading, ...sec.lines] : sec.lines
+      const room = FULL_INLINE_BLOCK_MAX - result.length
+      if (result.length > 0 && result[result.length - 1] !== '') result.push('')
+      if (secLines.length <= room) {
+        result.push(...secLines)
+      } else {
+        result.push(...secLines.slice(0, room))
+        break
+      }
+    }
+  }
+
+  // Append truncation notice if we cut content
+  while (result.length > 0 && result[result.length - 1] === '') result.pop()
+  if (result.length < allLines.length) {
+    result.push(`// … truncated — full standard: ${relPath}`)
+  }
+
+  return result.join('\n')
+}
+
 function extractStandardDescription(content) {
   const stripped = content.replace(/<!--[\s\S]*?-->/g, '').split('\n')
   const directiveRE = /\b(Never|Always|Must|Must not|Do not|Required|Require|Only|Should not|Cannot)\b/i
@@ -694,7 +758,7 @@ function loadComposedAddendum(signals, isLite = false) {
 
 // ─── Context output builders ──────────────────────────────────────────────────
 
-function appendStandards(lines, standardsResult, isLite = false, task = '') {
+function appendStandards(lines, standardsResult, isLite = false, isFull = false, task = '') {
   if (!standardsResult) return
   const { standards, paths } = standardsResult
   const keys = Object.keys(standards)
@@ -722,6 +786,23 @@ function appendStandards(lines, standardsResult, isLite = false, task = '') {
     (a, b) => scoreStandard(b[0]) - scoreStandard(a[0])
   )
 
+  // --full: inline content (full text or most-important block for long standards)
+  if (isFull) {
+    lines.push('')
+    lines.push('DESIGN STANDARDS (inline)')
+    for (const [key, content] of sorted) {
+      const filePath = paths?.[key]
+      const relPath = filePath
+        ? relative(PROJECT_ROOT, filePath).replace(/\\/g, '/')
+        : key
+      lines.push('')
+      lines.push(`// --- STANDARD: ${key}${filePath ? ` [${relPath}]` : ''} ---`)
+      lines.push(extractImportantBlock(content, relPath))
+    }
+    return
+  }
+
+  // Default: load-on-demand [REF] pointers
   lines.push('')
   lines.push('DESIGN STANDARDS (load as needed)')
   for (const [key, content] of sorted) {
@@ -737,7 +818,7 @@ function appendStandards(lines, standardsResult, isLite = false, task = '') {
   }
 }
 
-function buildSectionContext({ task, archCtx, signals, standards, addendum, output, diffSource, verify, noDesignAuthority }) {
+function buildSectionContext({ task, archCtx, signals, standards, addendum, output, diffSource, verify, isFull, noDesignAuthority }) {
   const { byRole } = signals
   const mainRef = byRole.reference?.[0]
   const extraRefs = (byRole.reference ?? []).slice(1)
@@ -765,7 +846,7 @@ function buildSectionContext({ task, archCtx, signals, standards, addendum, outp
   } else {
     lines.push('DESIGN AUTHORITY: design/design-arch.json')
     lines.push(archCtx)
-    appendStandards(lines, standards, signals.isLite, task)
+    appendStandards(lines, standards, signals.isLite, signals.isFull, task)
   }
 
   if (mainRef) {
@@ -849,7 +930,7 @@ function buildSectionContext({ task, archCtx, signals, standards, addendum, outp
   return lines.join('\n')
 }
 
-function buildVariantContext({ task, archCtx, signals, standards, addendum, output, mode, paired, verify, noDesignAuthority }) {
+function buildVariantContext({ task, archCtx, signals, standards, addendum, output, mode, paired, verify, isFull, noDesignAuthority }) {
   const { byRole } = signals
 
   // Under CONVERT_VARIANT, the interface file is classified as 'config' by loadRefs
@@ -880,7 +961,7 @@ function buildVariantContext({ task, archCtx, signals, standards, addendum, outp
   lines.push('')
   
   // Standards at highest priority (skipped when noDesignAuthority)
-  if (!noDesignAuthority) appendStandards(lines, standards, signals.isLite)
+  if (!noDesignAuthority) appendStandards(lines, standards, signals.isLite, signals.isFull)
 
   // Props interface — the contract
   if (interfaceRef) {
@@ -998,7 +1079,7 @@ function buildPageStage1Context({ task, mainRef, archCtx, noDesignAuthority }) {
   return lines.join('\n')
 }
 
-function buildPageStage2Context({ archCtx, signals, standards, addendum, plan, mainRef, outputDir, isLite, noDesignAuthority }) {
+function buildPageStage2Context({ archCtx, signals, standards, addendum, plan, mainRef, outputDir, isLite, isFull, noDesignAuthority }) {
   const todo = plan.sections.filter(s => !s.existingProjectSection)
   const skipped = plan.sections.length - todo.length
 
@@ -1015,7 +1096,7 @@ function buildPageStage2Context({ archCtx, signals, standards, addendum, plan, m
   } else {
     lines.push('DESIGN AUTHORITY: design/design-arch.json')
     lines.push(archCtx)
-    appendStandards(lines, standards, isLite)
+    appendStandards(lines, standards, isLite, isFull)
   }
   lines.push('')
   lines.push('GENERATION INSTRUCTIONS')
@@ -1134,6 +1215,9 @@ ui-forge — Next.js component generator for Agentic Model
   --rescan   Re-run scan.js before generating
   --replan   Force Stage 1 page plan regeneration
   --lite     Optimize for token efficiency (skip verbose standards/instructions)
+  --full     Inline design standards content instead of [REF] pointers. Standards over
+             ${FULL_INLINE_MAX_LINES} lines are trimmed to the most important block (## Rule section
+             or first ## section) up to ${FULL_INLINE_BLOCK_MAX} lines, with a truncation notice.
 
 First run: node .claude/skills/ui-forge/scripts/scan.js
 `)
@@ -1143,7 +1227,7 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
   if (typeof params.refs === 'string')
     params.refs = params.refs.split(',').map(s => s.trim())
 
-  for (const flag of ['rescan', 'replan', 'a11y', 'creative', 'no-default-standards', 'preview', 'verify', 'validate-input', 'lite', 'no-design-authority'])
+  for (const flag of ['rescan', 'replan', 'a11y', 'creative', 'no-default-standards', 'preview', 'verify', 'validate-input', 'lite', 'full', 'no-design-authority'])
     if (params[flag] === 'true') params[flag] = true
   // Normalise kebab-case flags → camelCase for internal use
   if (params['no-default-standards']) params.noDefaultStandards = true
@@ -1153,6 +1237,7 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
   const verifyMode = params.verify === true
   const validateInput = params['validate-input'] === true
   const isLite = params.lite === true
+  const isFull = params.full === true
   const verifyStandards = params.verifyStandards === true
   const noDesignAuthority = params.noDesignAuthority === true
 
@@ -1202,8 +1287,9 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
     brandStandard, isLite
   })
   
-  // Attach isLite to signals for easy passing
+  // Attach isLite/isFull to signals for easy passing
   signals.isLite = isLite
+  signals.isFull = isFull
   
   const archCtx = archToContext(arch, isLite)
 
@@ -1304,6 +1390,7 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
       mode,
       paired,
       verify: verifyMode,
+      isFull,
       noDesignAuthority,
     })
     process.stdout.write(variantCtx + '\n')
@@ -1363,7 +1450,7 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
       const outputDir = params.output ? dirname(resolve(PROJECT_ROOT, params.output)) : null
 
       process.stdout.write(buildPageStage2Context({
-        archCtx, signals, standards, addendum, plan, mainRef, outputDir, isLite, noDesignAuthority
+        archCtx, signals, standards, addendum, plan, mainRef, outputDir, isLite, isFull, noDesignAuthority
       }) + '\n')
 
       if (preview) {
@@ -1382,7 +1469,7 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
 
   // ── CONVERT_SECTION ─────────────────────────────────────────────────────────
   const addendum = loadComposedAddendum(signals, isLite)
-  process.stderr.write(`ui-forge: CONVERT_SECTION${signals.modifiers.length ? ' +' + signals.modifiers.join(' +') : ''}${isLite ? ' [LITE]' : ''}\n`)
+  process.stderr.write(`ui-forge: CONVERT_SECTION${signals.modifiers.length ? ' +' + signals.modifiers.join(' +') : ''}${isLite ? ' [LITE]' : ''}${isFull ? ' [FULL]' : ''}\n`)
 
   process.stdout.write(buildSectionContext({
     task: params.task,
@@ -1393,6 +1480,7 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
     output: params.output,
     diffSource,
     verify: verifyMode,
+    isFull,
     noDesignAuthority,
   }) + '\n')
 

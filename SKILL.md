@@ -1,6 +1,6 @@
 ---
 name: ui-forge
-version: 1.0.0
+version: 1.2.0
 description: 'Production Next.js component generator. Converts HTML, TSX, images, and JSON into project-compliant components using your design system. Triggers on component creation, HTML/TSX conversion, page generation, image-to-component tasks, or any frontend code generation request. Requires a one-time scan to build design/design-arch.json.'
 ---
 
@@ -130,6 +130,8 @@ Writes `design/claude-design-bundle/` — a folder with `README.md`, `tokens.jso
 | `--rescan` | Re-run scan.js before generating                   |
 | `--replan` | Force Stage 1 page plan regeneration               |
 | `--no-design-authority` | Strip design authority from output; AI follows reference styling instead. Requires `--refs`. Refused in paired (StackShift) mode. |
+| `--full` | Inline design standards content directly instead of `[REF]` load-on-demand pointers. Standards over 40 lines are trimmed to the most important block (up to 35 lines) with a truncation notice. |
+| `--lite` | Optimize for token efficiency — truncates arch context and uses a condensed addendum. Can be combined with `--full`. |
 
 **Scan flags:**
 

@@ -4,7 +4,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org)
 [![Skills Compatible](https://img.shields.io/badge/skills-compatible-blue)](https://github.com/vercel/skills-cli)
 
-> **Version** 1.0.0
+> **Version** 1.2.0
 
 Next.js component generator for Codex CLI, Claude Code, and other AI coding assistants. Converts HTML, TSX, images, and JSON reference materials into production-ready components that match your project's existing design system — using your actual component libraries, Tailwind tokens, and coding conventions.
 
@@ -452,6 +452,8 @@ Exit `1` on violations (missing default export, disallowed named exports, requir
 | Flag | Description |
 |------|-------------|
 | `--no-design-authority` | Strip the design authority block (arch context + standards) from forge output. The AI follows reference styling instead. Requires at least one `--refs` file. Refused in paired (StackShift) mode. Note: design standards are also stripped (they are part of project authority). |
+| `--full` | Inline design standards content directly in forge output instead of `[REF]` load-on-demand pointers. Standards over 40 lines are trimmed to the most important block (preamble + `## Rule` section or first `## ` section, up to 35 lines) with a `// … truncated` notice. Useful when you want all constraints visible upfront, or when the AI can't load files via `[REF]` references. Compatible with `--lite`. |
+| `--lite` | Optimize for token efficiency — truncates arch context (spacing/typography to first sentence, skips component/library inventory) and replaces the full prompt-patterns addendum with a single-line reference. Can be combined with `--full`. |
 
 ## Changelog
 
@@ -459,6 +461,8 @@ Full release notes are in [`change-logs/`](./change-logs/).
 
 | Version | Date | Notes |
 |---------|------|-------|
+| [1.2.0](./change-logs/1-2-0-full-inline-standards.md) | 2026-05-20 | `--full` flag (forge): inlines design standards content directly instead of `[REF]` load-on-demand pointers. Standards over 40 lines are trimmed to the most important block (preamble + `## Rule` or first `## ` section, up to 35 lines) with a truncation notice. `--full` and `--lite` can be combined. No changes to built-in standards required. |
+| [1.1.0](./change-logs/1-1-0-forgeignore-dedup-and-multi-platform-install.md) | 2026-05-20 | `.forgeignore` heading deduplication: rescan with `--theme stackshift` no longer duplicates section headings; fully idempotent (skips write when nothing new). Multi-platform install: `install` now writes slash commands and Bash permissions to every agentic platform directory present in cwd (`.claude`, `.agents`, `.cursor`, etc.), not just the detected one. Global installs use the absolute skill path in commands and permissions. 33 tests. |
 | [0.3.0](./change-logs/0-3-0-theme-override-and-no-design-authority.md) | 2026-05-08 | `--theme-override` (scan, stackshift-only): surgically replaces Google Fonts `@import`, `@layer base`, and `theme.extend` in project files before scan using a brace-counted parser; mandatory `.bak` backups, idempotent, preserves non-font `@import` lines. `themeOverride` data added to `themes/stackshift.json`. `--no-design-authority` (forge): strips design authority + standards from forge output; AI follows reference styling; refused in paired mode; requires `--refs`. 73 tests. |
 | [0.2.9](./change-logs/0-2-9-issues-analysis-fixes.md) | 2026-05-08 | Issues analysis fixes — StackShift .forgeignore now merges line-by-line with deduplication instead of appending; sample-standard.md no longer copied to project (template only); designStandards always merged on rescan (never deleted); patterns preserved when AI synthesis unavailable; duplicate anti-slop guardrails removed (single source of truth in prompt-patterns.md); design standards now sorted by task relevance with RULE extraction in [REF] descriptions; FORGE NOTES compliance block added. |
 | [0.2.8](./change-logs/0-2-8-forgeignore-standards-and-scan-fixes.md) | 2026-05-06 | .forgeignore, standards copy & scan fixes — `cli.js install` writes correct default template; `--theme stackshift` handles .forgeignore with create/overwrite/append logic; removed obsolete variant-router linking; copies built-in standards (stackshift-ui, nextjs-image, sample-standard) to project-local `design/standards/`; preserves `_paired` block on re-scan; documented naming distinction between `stackshift-ui` and `stackshift-section-variants`. |

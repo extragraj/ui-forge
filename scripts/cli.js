@@ -38,26 +38,36 @@ const PLATFORM_MAP = [
 
 function resolvePlatform(cwd) {
   const skillNorm = SKILL_ROOT.replace(/\\/g, '/');
+  const cwdNorm = cwd.replace(/\\/g, '/');
+  // Local install: skill is inside the project directory
+  const isLocal = skillNorm.startsWith(cwdNorm.endsWith('/') ? cwdNorm : cwdNorm + '/');
   for (const [relSkill, platformKey] of PLATFORM_MAP) {
     if (!skillNorm.includes('/' + relSkill)) continue;
     return {
       platformDir: join(cwd, ...platformKey.split('/')),
-      relSkill,
+      // Global installs use the absolute skill path so commands resolve correctly
+      relSkill: isLocal ? relSkill : SKILL_ROOT,
     };
   }
   // Fallback: global install or unknown layout — default to .claude in cwd
-  return { platformDir: join(cwd, '.claude'), relSkill: '.claude/skills/ui-forge' };
+  return { platformDir: join(cwd, '.claude'), relSkill: isLocal ? '.claude/skills/ui-forge' : SKILL_ROOT };
 }
 
 function install() {
   const cwd = process.cwd();
-  const { platformDir, relSkill } = resolvePlatform(cwd);
-  const commandsDir = join(platformDir, 'commands');
-  const settingsPath = join(platformDir, 'settings.json');
+  const { platformDir: primaryDir, relSkill } = resolvePlatform(cwd);
   const PERM = 'Bash(node ' + relSkill + '/scripts/*)';
   const run = (script) => '!`node ' + relSkill + '/scripts/' + script + ' $ARGUMENTS`';
 
-  mkdirSync(commandsDir, { recursive: true });
+  // Collect ALL agentic platform dirs to install into.
+  // Always include the primary (detected or default) platform; also add every
+  // other platform dir that already exists in cwd so slash commands and
+  // permissions are wired for every agent the project uses.
+  const targetDirs = new Set([primaryDir]);
+  for (const [, platformKey] of PLATFORM_MAP) {
+    const dir = join(cwd, ...platformKey.split('/'));
+    if (existsSync(dir)) targetDirs.add(dir);
+  }
 
   const commands = [
     {
@@ -86,26 +96,33 @@ function install() {
     },
   ];
 
-  const written = [];
-  for (const { file, description, hint, body } of commands) {
-    const content = `---\ndescription: ${description}\nargument-hint: ${hint}\n---\n\n${body}\n`;
-    writeFileSync(join(commandsDir, file), content, 'utf8');
-    written.push(file);
-  }
+  const results = [];
+  for (const platDir of targetDirs) {
+    const commandsDir = join(platDir, 'commands');
+    const settingsPath = join(platDir, 'settings.json');
+    mkdirSync(commandsDir, { recursive: true });
 
-  let settings = { permissions: { allow: [] } };
-  if (existsSync(settingsPath)) {
-    try { settings = JSON.parse(readFileSync(settingsPath, 'utf8')); } catch {}
-  }
-  settings.permissions ??= {};
-  settings.permissions.allow ??= [];
+    const written = [];
+    for (const { file, description, hint, body } of commands) {
+      const content = `---\ndescription: ${description}\nargument-hint: ${hint}\n---\n\n${body}\n`;
+      writeFileSync(join(commandsDir, file), content, 'utf8');
+      written.push(file);
+    }
 
-  let permAdded = false;
-  if (!settings.permissions.allow.includes(PERM)) {
-    settings.permissions.allow.push(PERM);
-    permAdded = true;
+    let settings = { permissions: { allow: [] } };
+    if (existsSync(settingsPath)) {
+      try { settings = JSON.parse(readFileSync(settingsPath, 'utf8')); } catch {}
+    }
+    settings.permissions ??= {};
+    settings.permissions.allow ??= [];
+    let permAdded = false;
+    if (!settings.permissions.allow.includes(PERM)) {
+      settings.permissions.allow.push(PERM);
+      permAdded = true;
+    }
+    writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
+    results.push({ commandsDir, settingsPath, written, permAdded });
   }
-  writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
 
   // Write .forgeignore from the general template if one doesn't already exist
   const forgeignorePath = join(cwd, '.forgeignore');
@@ -118,10 +135,13 @@ function install() {
   }
 
   console.log('UI Forge install complete.\n');
-  console.log(`Commands written to ${commandsDir}:`);
-  for (const f of written) console.log(`  ${f}`);
-  console.log(`\nSettings: ${settingsPath}`);
-  console.log(`  Permission ${permAdded ? 'added' : 'already present'}: ${PERM}`);
+  for (const { commandsDir, settingsPath, written, permAdded } of results) {
+    console.log(`Commands written to ${commandsDir}:`);
+    for (const f of written) console.log(`  ${f}`);
+    console.log(`\nSettings: ${settingsPath}`);
+    console.log(`  Permission ${permAdded ? 'added' : 'already present'}: ${PERM}`);
+    console.log('');
+  }
 }
 
 function getVersion() {

@@ -624,18 +624,14 @@ function synthesize(payload, pkgCount) {
 
 function mergeForgeignoreLines(existingContent, stackshiftContent) {
   const existingLines = new Set(
-    existingContent.split('\n')
-      .map(l => l.trim())
-      .filter(l => l && !l.startsWith('#'))
+    existingContent.split('\n').map(l => l.trim()).filter(Boolean)
   )
   const newLines = []
   const stackshiftLines = stackshiftContent.split('\n')
   for (const line of stackshiftLines) {
     const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('#')) {
-      newLines.push(line)  // keep comments/blank lines
-    } else if (!existingLines.has(trimmed)) {
-      newLines.push(line)  // only add genuinely new patterns
+    if (!trimmed || !existingLines.has(trimmed)) {
+      newLines.push(line)
     }
   }
   return newLines.join('\n')
@@ -668,9 +664,13 @@ function handleStackshiftForgeignore() {
   }
 
   // Non-template existing file → merge line-by-line to avoid duplicates
-  const merged = mergeForgeignoreLines(existingContent, stackshiftContent)
-  writeFileSync(forgeignorePath, existingContent.trimEnd() + '\n\n' + merged, 'utf-8')
-  process.stderr.write('  .forgeignore: StackShift exclusions merged (deduplicated).\n')
+  const merged = mergeForgeignoreLines(existingContent, stackshiftContent).trim()
+  if (merged) {
+    writeFileSync(forgeignorePath, existingContent.trimEnd() + '\n\n' + merged + '\n', 'utf-8')
+    process.stderr.write('  .forgeignore: StackShift exclusions merged (deduplicated).\n')
+  } else {
+    process.stderr.write('  .forgeignore: already up-to-date, no new StackShift exclusions.\n')
+  }
 }
 
 // ─── Theme override (--theme-override) ───────────────────────────────────────
