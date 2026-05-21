@@ -14,6 +14,7 @@ const SCRIPTS = {
   forge:  join(__dirname, 'invoke.js'),
   verify: join(__dirname, 'verify.js'),
   export: join(__dirname, 'export-design.js'),
+  mcp:    join(__dirname, 'mcp-server.js'),
 };
 
 function proxy(script) {
@@ -53,11 +54,32 @@ function resolvePlatform(cwd) {
   return { platformDir: join(cwd, '.claude'), relSkill: isLocal ? '.claude/skills/ui-forge' : SKILL_ROOT };
 }
 
+// Resolve the skill path to reference inside a specific platform's command/permission files.
+// Preference order, per platform target:
+//   1. If the skill is installed at this platform's own location (e.g. `.claude/skills/ui-forge`
+//      for the `.claude` platform), use that relative path — keeps each platform self-contained.
+//   2. Otherwise fall back to the actual skill location: a relative path if the skill is inside
+//      cwd, or the absolute SKILL_ROOT if it's installed globally.
+function relSkillForPlatform(cwd, platformDir, fallbackRelSkill) {
+  const platformDirNorm = platformDir.replace(/\\/g, '/');
+  const cwdNorm = cwd.replace(/\\/g, '/');
+  const platformKey = platformDirNorm.startsWith(cwdNorm)
+    ? platformDirNorm.slice(cwdNorm.length).replace(/^\//, '')
+    : null;
+  if (platformKey) {
+    for (const [relSkill, key] of PLATFORM_MAP) {
+      if (key !== platformKey) continue;
+      const candidateAbs = join(cwd, ...relSkill.split('/'));
+      if (existsSync(candidateAbs)) return relSkill;
+      break;
+    }
+  }
+  return fallbackRelSkill;
+}
+
 function install() {
   const cwd = process.cwd();
-  const { platformDir: primaryDir, relSkill } = resolvePlatform(cwd);
-  const PERM = 'Bash(node ' + relSkill + '/scripts/*)';
-  const run = (script) => '!`node ' + relSkill + '/scripts/' + script + ' $ARGUMENTS`';
+  const { platformDir: primaryDir, relSkill: fallbackRelSkill } = resolvePlatform(cwd);
 
   // Collect ALL agentic platform dirs to install into.
   // Always include the primary (detected or default) platform; also add every
@@ -69,35 +91,42 @@ function install() {
     if (existsSync(dir)) targetDirs.add(dir);
   }
 
-  const commands = [
-    {
-      file: 'forge-scan.md',
-      description: 'Scan the project and create design/design-arch.json',
-      hint: '[--theme shadcn|mantine|plain-tailwind|stackshift] [--theme-override] [--no-backup] [--schema-v4] [--quick]',
-      body: 'Run the UI Forge project scanner.\n\n' + run('scan.js'),
-    },
-    {
-      file: 'forge.md',
-      description: 'Generate a component using UI Forge',
-      hint: '--task "<task>" --refs <path[,path]> --output <path>',
-      body: 'Run UI Forge context preparation. Read the printed context block and generate the component(s).\n\n' + run('invoke.js'),
-    },
-    {
-      file: 'forge-verify.md',
-      description: 'Verify a UI Forge–generated component against its contract',
-      hint: '<component.tsx> <contract.ts> [--playwright <url>]',
-      body: run('verify.js'),
-    },
-    {
-      file: 'forge-export-design.md',
-      description: 'Export project design system as a Claude Design–ingestible bundle',
-      hint: '[out-dir]',
-      body: run('export-design.js'),
-    },
-  ];
+  const buildCommands = (relSkill) => {
+    const run = (script) => '!`node ' + relSkill + '/scripts/' + script + ' $ARGUMENTS`';
+    return [
+      {
+        file: 'forge-scan.md',
+        description: 'Scan the project and create design/design-arch.json',
+        hint: '[--theme shadcn|mantine|plain-tailwind|stackshift] [--theme-override] [--no-backup] [--schema-v4] [--quick]',
+        body: 'Run the UI Forge project scanner.\n\n' + run('scan.js'),
+      },
+      {
+        file: 'forge.md',
+        description: 'Generate a component using UI Forge',
+        hint: '--task "<task>" --refs <path[,path]> --output <path>',
+        body: 'Run UI Forge context preparation. Read the printed context block and generate the component(s).\n\n' + run('invoke.js'),
+      },
+      {
+        file: 'forge-verify.md',
+        description: 'Verify a UI Forge–generated component against its contract',
+        hint: '<component.tsx> <contract.ts> [--playwright <url>]',
+        body: run('verify.js'),
+      },
+      {
+        file: 'forge-export-design.md',
+        description: 'Export project design system as a Claude Design–ingestible bundle',
+        hint: '[out-dir]',
+        body: run('export-design.js'),
+      },
+    ];
+  };
 
   const results = [];
   for (const platDir of targetDirs) {
+    const relSkill = relSkillForPlatform(cwd, platDir, fallbackRelSkill);
+    const PERM = 'Bash(node ' + relSkill + '/scripts/*)';
+    const commands = buildCommands(relSkill);
+
     const commandsDir = join(platDir, 'commands');
     const settingsPath = join(platDir, 'settings.json');
     mkdirSync(commandsDir, { recursive: true });
@@ -121,7 +150,7 @@ function install() {
       permAdded = true;
     }
     writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
-    results.push({ commandsDir, settingsPath, written, permAdded });
+    results.push({ commandsDir, settingsPath, written, permAdded, relSkill, perm: PERM });
   }
 
   // Write .forgeignore from the general template if one doesn't already exist
@@ -135,13 +164,35 @@ function install() {
   }
 
   console.log('UI Forge install complete.\n');
-  for (const { commandsDir, settingsPath, written, permAdded } of results) {
-    console.log(`Commands written to ${commandsDir}:`);
+  for (const { commandsDir, settingsPath, written, permAdded, relSkill, perm } of results) {
+    console.log(`Commands written to ${commandsDir} (skill: ${relSkill}):`);
     for (const f of written) console.log(`  ${f}`);
     console.log(`\nSettings: ${settingsPath}`);
-    console.log(`  Permission ${permAdded ? 'added' : 'already present'}: ${PERM}`);
+    console.log(`  Permission ${permAdded ? 'added' : 'already present'}: ${perm}`);
     console.log('');
   }
+}
+
+function mcpConfig() {
+  const serverPath = SCRIPTS.mcp;
+  const snippet = {
+    mcpServers: {
+      'ui-forge': {
+        command: 'node',
+        args: [serverPath],
+      },
+    },
+  };
+  console.log('UI Forge MCP server config\n');
+  console.log('Add this to your MCP client settings (Cline, Cursor, Claude Code, Codex, etc.):\n');
+  console.log(JSON.stringify(snippet, null, 2));
+  console.log('\nClient-specific files:');
+  console.log('  Cline (VS Code):     %APPDATA%\\Code\\User\\globalStorage\\saoudrizwan.claude-dev\\settings\\cline_mcp_settings.json');
+  console.log('  Claude Code:         ~/.claude.json   (mcpServers key)');
+  console.log('  Cursor:              ~/.cursor/mcp.json');
+  console.log('  Codex:               ~/.codex/config.toml (use [mcp_servers.ui-forge] section)');
+  console.log('\nServer path: ' + serverPath);
+  console.log('Restart the client after editing the config.');
 }
 
 function getVersion() {
@@ -177,6 +228,8 @@ Commands:
                      --playwright <url>   Also take a visual screenshot
   export [args]    Export design-arch.json as a Claude Design bundle
                      [out-dir]            Custom output directory (default: design/claude-design-bundle)
+  mcp              Run the MCP server (stdio). Use this in your MCP client config.
+  mcp-config       Print the JSON snippet to register the MCP server with your CLI
   help             Show this help
 `.trim());
 }
@@ -187,6 +240,8 @@ switch (cmd) {
   case 'forge':         proxy(SCRIPTS.forge); break;
   case 'verify':        proxy(SCRIPTS.verify); break;
   case 'export':        proxy(SCRIPTS.export); break;
+  case 'mcp':           proxy(SCRIPTS.mcp); break;
+  case 'mcp-config':    mcpConfig(); break;
   case 'help':
   case '--help':
   case '-h':

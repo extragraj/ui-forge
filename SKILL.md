@@ -1,6 +1,6 @@
 ---
 name: ui-forge
-version: 1.2.0
+version: 1.3.1
 description: 'Production Next.js component generator. Converts HTML, TSX, images, and JSON into project-compliant components using your design system. Triggers on component creation, HTML/TSX conversion, page generation, image-to-component tasks, or any frontend code generation request. Requires a one-time scan to build design/design-arch.json.'
 ---
 
@@ -187,6 +187,53 @@ SKILL_ROOT="$(node .claude/skills/ui-forge/scripts/detect.js)"  # Node.js (works
 
 node "$SKILL_ROOT/scripts/cli.js" scan --quick
 ```
+
+### MCP Server (Cline, web clients, any shell-free CLI)
+
+For CLIs without shell execution — restricted Cline modes, web-based clients, sandboxed runners — UI Forge ships an MCP server that exposes the same scripts as Model Context Protocol tools. The client launches the server and calls tools instead of running shell commands.
+
+**Tools exposed:**
+
+| Tool | Wraps | Purpose |
+|------|-------|---------|
+| `forge_invoke` | `invoke.js` | Prepare generation context |
+| `forge_scan` | `scan.js` | Scan project → `design/design-arch.json` |
+| `forge_verify` | `verify.js` | Verify a generated component |
+| `forge_export_design` | `export-design.js` | Export a Claude Design bundle |
+
+Each tool accepts `args: string[]` (passed verbatim to the script) and `project_root: string?` (cwd override).
+
+**One-time setup** — print the snippet for your client:
+
+```bash
+node .claude/skills/ui-forge/scripts/cli.js mcp-config
+```
+
+Paste the printed `mcpServers` entry into:
+
+| Client | Config file |
+|--------|-------------|
+| Cline (VS Code) | `%APPDATA%\Code\User\globalStorage\saoudrizwan.claude-dev\settings\cline_mcp_settings.json` |
+| Claude Code | `~/.claude.json` (`mcpServers` key) |
+| Cursor | `~/.cursor/mcp.json` |
+| Codex | `~/.codex/config.toml` (`[mcp_servers.ui-forge]` section) |
+
+Restart the client. The `forge_invoke` / `forge_scan` / `forge_verify` / `forge_export_design` tools are then available to the AI — no shell required.
+
+**Calling pattern (any MCP client):**
+
+```jsonc
+// tools/call forge_invoke
+{
+  "name": "forge_invoke",
+  "arguments": {
+    "args": ["--task", "Convert hero section", "--refs", "./hero.html", "--output", "./components/Hero.tsx"],
+    "project_root": "/abs/path/to/your/project"
+  }
+}
+```
+
+The tool returns the same structured context that `invoke.js` would print to stdout — read it and generate the component.
 
 ## Signals
 
