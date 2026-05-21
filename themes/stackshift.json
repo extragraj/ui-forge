@@ -69,7 +69,7 @@
     { "name": "@stackshift-ui/blockstyle", "uses": 1 }
   ],
   "tailwind": {
-    "colorTokens": "primary, secondary, background, primary-foreground, secondary-foreground, rounded-global, font-global"
+    "colorTokens": "background, foreground, primary, primary-foreground, secondary, secondary-foreground, muted, muted-foreground, accent, accent-foreground, destructive, destructive-foreground, card, card-foreground, popover, popover-foreground, border, input, ring, sidebar, sidebar-foreground, sidebar-primary, sidebar-primary-foreground, sidebar-accent, sidebar-accent-foreground, sidebar-border, sidebar-ring, rounded-global, font-global"
   },
   "patterns": {
     "spacing": "Section vertical rhythm: py-20 (hero/featured), py-16 (standard content), py-12 (dense/utility) — always on <Section>, never <Container>. Container: maxWidth={1280} or named xl/2xl. Flex gap prop (numeric): gap={4} tight, gap={6} standard, gap={8} loose. Responsive: <Flex direction='col' className='md:flex-row'>.",

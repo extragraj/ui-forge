@@ -46,3 +46,24 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@stackshif
 ## Provider — do not import in variant files
 
 `@stackshift-ui/system` exports `StackShiftUIProvider` and `useStackShiftUIComponents`. These are for `pages/_app.tsx` setup only. Never import from `@stackshift-ui/system` in variant files.
+
+## Provider awareness — do not import next/image or next/link
+
+`StackShiftUIProvider` (configured in `pages/_app.tsx`) replaces `<Image>` from `@stackshift-ui/image` with Next.js `<Image>` and `<Link>`/`<Button as="link">` with Next.js `<Link>` **site-wide**. Variant files should use the `@stackshift-ui` components — they will automatically render through Next.js primitives:
+
+```tsx
+// ✅ Correct — the provider wires this to next/image
+import { Image } from "@stackshift-ui/image"
+
+// ✅ Correct — the provider wires the anchor to next/link
+import { Button } from "@stackshift-ui/button"
+<Button as="link" link={primaryButton}>Click here</Button>
+
+// ❌ Wrong — bypasses the provider; image is no longer swappable site-wide
+import Image from "next/image"
+
+// ❌ Wrong — same problem; loses the conditionalLink routing
+import Link from "next/link"
+```
+
+See `07-setup.md` for the full provider configuration. To customize the Next.js Image/Link wrapper site-wide, edit `components/ui/image.tsx` / `components/ui/link.tsx` — not the variant file.

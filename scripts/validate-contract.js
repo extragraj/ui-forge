@@ -2,32 +2,37 @@
 /**
  * ui-forge / validate-contract.js
  *
- * Post-generation contract validator for CONVERT_VARIANT outputs.
- * Heuristic / regex-based (no TypeScript compiler dependency).
- *
- * Checks:
- *   - Output has exactly one default export (the component)
- *   - Output has no disallowed named exports (the contract interface must be
- *     imported, not redefined or re-exported)
- *   - Output imports the contract interface by name
- *   - Every required prop from the contract is destructured or referenced
- *   - `null` fallback is present (the Variant Router invariant)
- *   - `?? undefined` is used for optional props (warns if `?? null` appears)
+ * CLI wrapper around packages/variant-contract/validate.js — the shared,
+ * stdlib-only contract validator. Use this for direct CLI verification of a
+ * CONVERT_VARIANT output against its props interface.
  *
  * Exit codes:
  *   0 — pass
- *   1 — violations found (prints report to stderr)
+ *   1 — violations found (prints report to stdout, exit 1)
  *   2 — invocation error (bad args, missing files)
  *
  * Usage:
  *   node scripts/validate-contract.js <output-tsx-file> <contract-ts-file>
  *   node scripts/validate-contract.js ./components/MyVariant.tsx ./components/types.ts
+ *
+ * Paired-mode detection:
+ *   - .stackshift/installed.json present, OR
+ *   - design/design-arch.json has isStackShift: true
+ *
+ * In paired mode the validator runs additional variant-body rule checks
+ * (no raw HTML primitives, no !important, no import React, etc.) on top
+ * of the standard contract checks.
  */
 
 import { readFileSync, existsSync } from 'fs'
-import { resolve, join } from 'path'
+import { resolve, join, dirname } from 'path'
+import { fileURLToPath } from 'url'
+import { validate } from '../packages/variant-contract/validate.js'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const STACKSHIFT_MARKER = join(process.cwd(), '.stackshift', 'installed.json')
+const DESIGN_ARCH = join(process.cwd(), 'design', 'design-arch.json')
 
 const [, , outputArg, contractArg] = process.argv
 
@@ -51,187 +56,44 @@ if (!existsSync(contractPath)) {
 const output = readFileSync(outputPath, 'utf-8')
 const contract = readFileSync(contractPath, 'utf-8')
 
-// ─── Parse contract ──────────────────────────────────────────────────────────
-
-function parseInterfaceName(src) {
-  const m = src.match(/(?:export\s+)?(?:interface|type)\s+(\w+)/)
-  return m ? m[1] : null
-}
-
-function parseContractVersion(src) {
-  const m = src.match(/@contract-version\s+(\d+\.\d+\.\d+(?:-[\w.]+)?)/)
-  return m ? m[1] : '1.0.0'
-}
-
-// Extract prop names from interface/type body.
-// Handles:   propName: Type         and    propName?: Type
-function parseRequiredProps(src, interfaceName) {
-  if (!interfaceName) return { required: [], optional: [] }
-
-  // Grab body between the first { and matching }
-  const headerRe = new RegExp(`(?:interface|type)\\s+${interfaceName}[^{]*\\{`)
-  const headerMatch = src.match(headerRe)
-  if (!headerMatch) return { required: [], optional: [] }
-
-  let depth = 0
-  let start = headerMatch.index + headerMatch[0].length
-  let end = start
-  for (let i = start - 1; i < src.length; i++) {
-    const ch = src[i]
-    if (ch === '{') depth++
-    else if (ch === '}') {
-      depth--
-      if (depth === 0) { end = i; break }
+// Paired-mode detection — marker file OR arch.isStackShift
+let pairedMode = existsSync(STACKSHIFT_MARKER)
+let archIsStackShift = false
+if (!pairedMode && existsSync(DESIGN_ARCH)) {
+  try {
+    const arch = JSON.parse(readFileSync(DESIGN_ARCH, 'utf-8'))
+    if (arch.isStackShift === true) {
+      pairedMode = true
+      archIsStackShift = true
     }
-  }
-  const body = src.slice(start, end)
-
-  // Walk body and collect prop declarations at top level only
-  // (skip nested object / array / generic type members)
-  const required = []
-  const optional = []
-  let bodyDepth = 0
-  let line = ''
-  const flushLine = () => {
-    // Expect leading identifier followed by optional ? and a colon
-    const m = line.match(/^\s*(\w+)\s*(\??):/)
-    if (m) {
-      const [, name, opt] = m
-      if (opt === '?') optional.push(name)
-      else required.push(name)
-    }
-    line = ''
-  }
-  for (let i = 0; i < body.length; i++) {
-    const ch = body[i]
-    if (ch === '{' || ch === '[' || ch === '(' || ch === '<') { bodyDepth++; line += ch; continue }
-    if (ch === '}' || ch === ']' || ch === ')' || ch === '>') { bodyDepth--; line += ch; continue }
-    if (bodyDepth === 0 && (ch === '\n' || ch === ';' || ch === ',')) { flushLine(); continue }
-    line += ch
-  }
-  flushLine()
-  return { required, optional }
+  } catch {}
 }
 
-// ─── Parse output ────────────────────────────────────────────────────────────
+const result = validate(output, contract, { pairedMode })
+const { violations, warnings, meta } = result
 
-function getDefaultExportName(src) {
-  return (
-    src.match(/export\s+default\s+function\s+(\w+)/)?.[1] ??
-    src.match(/export\s+default\s+(\w+)/)?.[1] ??
+// Resolve paired-mode default-export name (for report display)
+let pairedDefaultName = null
+if (pairedMode) {
+  pairedDefaultName =
+    output.match(/export\s+default\s+function\s+(\w+)/)?.[1] ??
+    output.match(/export\s+default\s+(\w+)/)?.[1] ??
     null
-  )
 }
-
-function countDefaultExports(src) {
-  const matches = src.match(/export\s+default\b/g)
-  return matches ? matches.length : 0
-}
-
-function findDisallowedNamedExports(src, contractInterfaceName, pairedDefaultName) {
-  // Allowed: no named exports at all (the contract is imported, not re-exported).
-  // Paired-mode exception: one `export { ComponentName }` matching the default export is
-  // required by the StackShift Variant Router — permit it when pairedDefaultName is set.
-  const violations = []
-
-  const namedBlockRe = /export\s*\{([^}]+)\}/g
-  let bm
-  while ((bm = namedBlockRe.exec(src)) !== null) {
-    const names = bm[1].split(',').map(s => s.trim().split(/\s+as\s+/)[0]).filter(Boolean)
-    for (const n of names) {
-      if (pairedDefaultName && n === pairedDefaultName) continue
-      violations.push(`export { ${n} }`)
-    }
-  }
-
-  const namedDeclRe = /export\s+(?:const|let|var|function|class|interface|type|enum)\s+(\w+)/g
-  let dm
-  while ((dm = namedDeclRe.exec(src)) !== null) {
-    // Allow type-only re-export of the contract interface (rare but harmless)
-    if (dm[1] === contractInterfaceName && /export\s+(?:interface|type)\s+/.test(dm[0])) {
-      violations.push(`redefined contract ${contractInterfaceName}`)
-    } else {
-      violations.push(`export ${dm[1]}`)
-    }
-  }
-  return violations
-}
-
-function importsContract(src, interfaceName) {
-  if (!interfaceName) return false
-  const importRe = new RegExp(
-    `import\\s+(?:type\\s+)?\\{[^}]*\\b${interfaceName}\\b[^}]*\\}\\s+from`
-  )
-  return importRe.test(src)
-}
-
-function missingDestructures(src, requiredProps) {
-  const missing = []
-  for (const prop of requiredProps) {
-    // Match destructure, JSX {prop}, props.prop, etc.
-    const re = new RegExp(`\\b${prop}\\b`)
-    if (!re.test(src)) missing.push(prop)
-  }
-  return missing
-}
-
-function hasNullFallback(src) {
-  // Component returns `null` somewhere — the Variant Router invariant
-  return /return\s+null\s*[;}\n]/.test(src) || /\?\s*null\s*:/.test(src)
-}
-
-function usesNullForOptional(src) {
-  // `?? null` is the wrong fallback for optionals (should be ?? undefined)
-  const m = [...src.matchAll(/\?\?\s*null\b/g)]
-  return m.length
-}
-
-// ─── Run checks ──────────────────────────────────────────────────────────────
-
-const interfaceName = parseInterfaceName(contract)
-const contractVersion = parseContractVersion(contract)
-const { required, optional } = parseRequiredProps(contract, interfaceName)
-
-// Auto-detect StackShift paired mode — permit the Variant Router named export
-const isStackShiftPaired = existsSync(STACKSHIFT_MARKER)
-const pairedDefaultName = isStackShiftPaired ? getDefaultExportName(output) : null
-
-const violations = []
-const warnings = []
-
-const defaultCount = countDefaultExports(output)
-if (defaultCount === 0) violations.push('No default export found')
-if (defaultCount > 1) violations.push(`Multiple default exports found (${defaultCount})`)
-
-const namedExports = findDisallowedNamedExports(output, interfaceName, pairedDefaultName)
-if (namedExports.length)
-  violations.push(`Disallowed named exports: ${namedExports.join(', ')}`)
-
-if (interfaceName && !importsContract(output, interfaceName))
-  violations.push(`Contract interface "${interfaceName}" is not imported — must be imported, not redefined`)
-
-const missing = missingDestructures(output, required)
-if (missing.length)
-  violations.push(`Required props not consumed: ${missing.join(', ')}`)
-
-if (required.length > 0 && !hasNullFallback(output))
-  violations.push(`No null fallback found — Variant Router invariant requires \`return null\` when required props are absent`)
-
-const badNullCount = usesNullForOptional(output)
-if (badNullCount)
-  warnings.push(`Found ${badNullCount} instance(s) of \`?? null\` — use \`?? undefined\` for optional props (per SIGNAL_VARIANT rules)`)
-
-// ─── Report ──────────────────────────────────────────────────────────────────
 
 const report = []
 report.push(`UI Forge — Contract Validation`)
 report.push(`  output:    ${outputArg}`)
 report.push(`  contract:  ${contractArg}`)
-report.push(`  interface: ${interfaceName ?? '<unparsed>'}`)
-report.push(`  version:   ${contractVersion}`)
-report.push(`  required:  ${required.length ? required.join(', ') : '(none)'}`)
-report.push(`  optional:  ${optional.length ? optional.join(', ') : '(none)'}`)
-if (isStackShiftPaired) report.push(`  paired:    stackshift (named export "${pairedDefaultName ?? '?'}" permitted)`)
+report.push(`  interface: ${meta.ifaceName ?? '<unparsed>'}`)
+report.push(`  version:   ${meta.contractVersion}`)
+report.push(`  required:  ${meta.required.length ? meta.required.join(', ') : '(none)'}`)
+report.push(`  optional:  ${meta.optional.length ? meta.optional.join(', ') : '(none)'}`)
+if (pairedMode) {
+  const trigger = archIsStackShift ? 'arch.isStackShift' : 'marker file'
+  const namedNote = pairedDefaultName ? ` (named export "${pairedDefaultName}" permitted)` : ''
+  report.push(`  paired:    stackshift via ${trigger}${namedNote}`)
+}
 
 if (violations.length) {
   report.push('')

@@ -672,6 +672,7 @@ function detectSignals(task, classifiedRefs, explicitSignal, opts = {}) {
     ...(opts.creative ? ['CREATIVE'] : []),
     ...(opts.diff ? ['DIFF'] : []),
     ...(isHandoff ? ['CLAUDE_DESIGN'] : []),
+    ...(opts.stackshiftUi ? ['STACKSHIFT_UI'] : []),
   ]
 
   // Explicit --signal override
@@ -1254,8 +1255,14 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
   const arch = loadDesignArch()
   const paired = detectPairedMode()
 
+  // Unified paired-mode gate: the StackShift marker file OR --theme stackshift
+  // (which sets arch.isStackShift=true) both qualify as "paired-like" so that
+  // body-rule guardrails, refusals, and the SIGNAL_STACKSHIFT_UI addendum
+  // behave consistently across full-install and theme-only setups.
+  const pairedLike = Boolean(paired) || arch.isStackShift === true
+
   // --preview refused in paired (StackShift) mode
-  if (preview && paired) {
+  if (preview && pairedLike) {
     process.stderr.write('Error: --preview is disabled in StackShift-paired mode. Use `next dev` or Sanity Studio section preview.\n')
     process.exit(1)
   }
@@ -1284,7 +1291,7 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
   const standards = loadDesignStandards(arch, { useBuiltins: !params.noDefaultStandards })
   const signals = detectSignals(params.task, classifiedRefs, params.signal, {
     a11y: a11yRequired, creative, diff: !!params.diff, handoff: !!params.handoff,
-    brandStandard, isLite
+    brandStandard, isLite, stackshiftUi: pairedLike
   })
   
   // Attach isLite/isFull to signals for easy passing
@@ -1316,6 +1323,8 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
 
   if (paired)
     process.stderr.write(`ui-forge: paired-mode detected (stackshift ${paired.version})\n`)
+  else if (pairedLike)
+    process.stderr.write(`ui-forge: paired-like mode (arch.isStackShift=true; --theme stackshift)\n`)
 
   // --no-design-authority validation
   if (noDesignAuthority) {
@@ -1323,7 +1332,7 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
       process.stderr.write('Error: --no-design-authority requires at least one --refs file.\n')
       process.exit(1)
     }
-    if (paired) {
+    if (pairedLike) {
       process.stderr.write('Error: --no-design-authority is refused in paired (StackShift) mode — design authority is always required.\n')
       process.exit(1)
     }
@@ -1339,7 +1348,7 @@ First run: node .claude/skills/ui-forge/scripts/scan.js
       process.stderr.write('Error: +CREATIVE requires CONVERT_SECTION. Pass --signal CONVERT_SECTION or remove the layout ref.\n')
       process.exit(1)
     }
-    if (paired) {
+    if (pairedLike) {
       process.stderr.write('Error: +CREATIVE is refused in paired (StackShift) mode — a contract is always supplied.\n')
       process.exit(1)
     }

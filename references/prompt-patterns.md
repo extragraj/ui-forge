@@ -3,7 +3,8 @@
 Composition rules:
 - `CONVERT_SECTION` provides the base **addendum** and the **wrapper** for all generation calls.
 - `SIGNAL_VARIANT` replaces `CONVERT_SECTION` as the base addendum under companion-skill handoff mode.
-- `SIGNAL_CONFIG`, `SIGNAL_IMAGE`, `SIGNAL_A11Y`, `SIGNAL_BRAND`, `SIGNAL_CREATIVE`, and `SIGNAL_DIFF` provide **addendum-only** blocks appended after the base.
+- `SIGNAL_CONFIG`, `SIGNAL_IMAGE`, `SIGNAL_A11Y`, `SIGNAL_BRAND`, `SIGNAL_CREATIVE`, `SIGNAL_DIFF`, and `SIGNAL_STACKSHIFT_UI` provide **addendum-only** blocks appended after the base.
+- `SIGNAL_STACKSHIFT_UI` auto-activates in paired mode (`.stackshift/installed.json` present) or when `arch.isStackShift === true` (set by `--theme stackshift`). Composes with `CONVERT_SECTION`, `CONVERT_VARIANT`, `+A11Y`, `+CONFIG`, `+IMAGE`, `+BRAND`, and `+CLAUDE_DESIGN`.
 - `SIGNAL_CREATIVE` is standalone-only — refused under `CONVERT_VARIANT`, `CONVERT_PAGE`, and paired mode.
 - `SIGNAL_DIFF` is `CONVERT_SECTION`-only — refused under `CONVERT_VARIANT`, `CONVERT_PAGE`, and `+CREATIVE`.
 - `CONVERT_PAGE` Stage 1 uses a hardcoded Haiku prompt in `invoke.js` — no pattern block needed.
@@ -151,6 +152,9 @@ CONTRACT COMPLIANCE (REQUIRED tier — violations break the handoff):
   - Do NOT write any `export` other than the default component export.
     PAIRED mode exception: when `PAIRED: stackshift` appears in the context header, add
     `export { ComponentName }` after the default export — required by the Variant Router.
+    Additionally, the SIGNAL_STACKSHIFT_UI addendum below will be present — its
+    variant-body hard rules (imports, JSX, styling, data) apply on top of the
+    contract rules in this block.
   - Do NOT write or modify index.tsx, section schemas, types files, or query files.
   - Honor the contract version declared in the props file (/** @contract-version x.y.z */).
     Absence is treated as 1.0.0. If you see a version you do not recognise, note it in FORGE NOTES
@@ -345,6 +349,98 @@ In FORGE NOTES, add a CLAUDE_DESIGN sub-block:
   //   task: <README heading or user-provided task>
   //   token remappings: <Claude Design value → design-arch token, for each color/spacing divergence>
   //   layout preserved: <key structural choices taken from the handoff>
+```
+
+---
+
+## SIGNAL_STACKSHIFT_UI
+
+Addendum-only. Auto-activates when either condition is true:
+  - `.stackshift/installed.json` is present (full paired mode)
+  - `arch.isStackShift === true` (set by `scan.js --theme stackshift`)
+
+Encodes the variant-body hard rules as system instructions so they survive
+`--lite` and `--full` equally. Composes on top of the base addendum
+(`CONVERT_SECTION` or `SIGNAL_VARIANT`) — does not replace it.
+
+**System Addendum:**
+```
+STACKSHIFT_UI SIGNAL — paired-mode variant body rules (hard).
+
+IMPORTS
+  - Every UI primitive comes from a @stackshift-ui/<pkg> scoped package
+    (heading, text, button, link, image, section, container, flex, grid,
+    grid-item, card, badge, avatar, social-icons, stats-card, skeleton,
+    input, textarea, select, checkbox(-group), radio(-group), switch,
+    label, form-field, form, webriq-form, input-file, date-picker, calendar,
+    dialog, sheet, popover, tooltip, dropdown-menu, menu, accordion, toast,
+    pagination, data-table, table, scroll-area, toggle(-group),
+    swiper-button, swiper-pagination, blockstyle, youtube-video).
+  - No `import * as <X> from "@stackshift-ui/..."` — barrel imports break
+    next/dynamic; import each component from its own package.
+  - No `import React from "react"` — Next.js 17+ omits it.
+  - Do NOT import `@stackshift-ui/system` in variant files; that package is
+    for StackShiftUIProvider setup in pages/_app.tsx only.
+  - Do NOT import `next/image` or `next/link` directly. StackShiftUIProvider
+    already wires `<Image>` from @stackshift-ui/image and `<Button as="link">`
+    to Next.js primitives site-wide.
+
+JSX
+  - No raw HTML primitives for content: `<h1>…<h6>`, `<p>`, `<button>`,
+    `<a>`, `<img>`, `<section>` — use their @stackshift-ui equivalents
+    (Heading, Text, Button, Image, Section). Bare `<div>` / `<span>` allowed
+    only for non-semantic layout glue; prefer `<Flex>` / `<Grid>` /
+    `<GridItem>`.
+  - `conditionalLink`-typed fields (primaryButton, secondaryButton,
+    ctaButton, button, routes[], links[], navLinks[], footerLinks[],
+    socialLinks[]) render through `<Button as="link" link={field}>`.
+    Never branch on `field.linkType` in the variant — the component does it.
+
+STYLING
+  - Built-in props first (variant, size, fontSize, weight, maxWidth, align,
+    justify, gap, wrap, direction). Reach for `className` only when the
+    prop API cannot express the required style.
+  - Never pass `!important` in a className — breaks `tailwind-merge` order.
+  - Vertical padding goes on `<Section>` (py-20 hero, py-16 standard,
+    py-12 dense). Never on `<Container>` (it is horizontal-only).
+  - `<Flex gap>` is a numeric prop (gap={6}), not a Tailwind class string.
+  - No `dark:` Tailwind variants — the CMS theme system handles mode
+    switching globally via CSS variables.
+  - Theme tokens only: bg-primary, bg-secondary, bg-background, text-foreground,
+    text-primary-foreground, text-secondary-foreground, rounded-global,
+    font-global. No raw hex literals in className strings.
+  - No inline `style={{ ... }}` on @stackshift-ui components — bypasses the
+    theming system and tailwind-merge logic.
+
+DATA
+  - All content comes from props (Sanity-driven). Never hardcode strings in
+    JSX text content.
+  - Never use `?? "fallback string"` as a substitute for real CMS content.
+    Use conditional rendering: `{title && <Heading ...>{title}</Heading>}`.
+    `?? undefined` is still permitted for prop pass-through (preserves the
+    SIGNAL_VARIANT optional-prop rule).
+  - `<Image alt={...}>` is mandatory; decorative images use alt="" explicitly.
+
+ACCESSIBILITY (cross-link to SIGNAL_A11Y)
+  - `<Section>` needs `aria-labelledby` pointing to a visible heading id,
+    or `aria-label` when no visible heading exists.
+  - Icon-only `<Button>` requires `aria-label`.
+  - Trust @stackshift-ui/dialog, /sheet, /tooltip, /dropdown-menu,
+    /accordion, /toast — they implement WAI-ARIA internally. Do not add
+    redundant role / aria-* attributes.
+
+NAMING (cross-link)
+  - Variant key sequence is owned by StackShift, not this generator. But
+    if the input references a variant key, respect the existing sequence.
+    Never propose a two-letter key (variant_aa, variant_ab, …) while
+    single letters before `z` remain available. If you see one in the
+    input while single letters are free, flag it in FORGE NOTES.
+
+In FORGE NOTES, add a STACKSHIFT-UI sub-block listing:
+  - Primitive choices (e.g. "Heading h2 / fontSize=3xl / weight=semibold")
+  - className overrides and why (when built-in props couldn't express it)
+  - conditionalLink fields rendered and their variant choice
+  - Any raw <div>/<span> used for layout glue and why
 ```
 
 ---

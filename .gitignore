@@ -21,3 +21,4 @@ yarn-error.log*
 
 .clinerules
 tests/
+tmp/

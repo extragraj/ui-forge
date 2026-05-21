@@ -360,15 +360,21 @@ function copyBuiltinStandardDir(srcDir, destDir) {
   const src = join(CLAUDE_SKILL_DIR, 'references', 'standards', srcDir)
   const dest = join(PROJECT_ROOT, 'design', 'standards', destDir)
   if (!existsSync(src)) return false
-  if (existsSync(dest)) return false // preserve project edits
+  // File-level idempotency: skip files that already exist in the project copy
+  // (preserves edits), copy files that are absent (lets new upstream files
+  // propagate to existing projects on rescan).
   try {
-    mkdirSync(dest, { recursive: true })
+    if (!existsSync(dest)) mkdirSync(dest, { recursive: true })
+    let anyCopied = false
     for (const entry of readdirSync(src, { withFileTypes: true })) {
       if (!entry.isFile() || !entry.name.endsWith('.md')) continue
+      const destFile = join(dest, entry.name)
+      if (existsSync(destFile)) continue
       const content = readFileSync(join(src, entry.name), 'utf-8')
-      writeFileSync(join(dest, entry.name), content, 'utf-8')
+      writeFileSync(destFile, content, 'utf-8')
+      anyCopied = true
     }
-    return true
+    return anyCopied
   } catch { return false }
 }
 

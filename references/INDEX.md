@@ -38,3 +38,4 @@ Blocks are parsed by `extractBlock()`. Search for `## BLOCK_NAME` to find exact 
 | `SIGNAL_CREATIVE` | Greenfield mode + `// FORGE PHILOSOPHY` | 213 |
 | `SIGNAL_DIFF` | Surgical iteration — preserve unchanged regions, rewrite FORGE NOTES | 243 |
 | `SIGNAL_CLAUDE_DESIGN` | Claude Design handoff — handoff wins for layout, design-arch wins for tokens | 268 |
+| `SIGNAL_STACKSHIFT_UI` | Paired-mode variant-body hard rules (imports, JSX, styling, data) — auto-injected when marker file or `arch.isStackShift` present | 326 |

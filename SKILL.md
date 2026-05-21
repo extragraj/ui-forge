@@ -1,6 +1,6 @@
 ---
 name: ui-forge
-version: 1.3.1
+version: 1.4.0
 description: 'Production Next.js component generator. Converts HTML, TSX, images, and JSON into project-compliant components using your design system. Triggers on component creation, HTML/TSX conversion, page generation, image-to-component tasks, or any frontend code generation request. Requires a one-time scan to build design/design-arch.json.'
 ---
 
@@ -252,6 +252,25 @@ The tool returns the same structured context that `invoke.js` would print to std
 - `+CREATIVE` — Via `--creative` (refused under CONVERT_VARIANT and CONVERT_PAGE)
 - `+DIFF` — Via `--diff <path>` (CONVERT_SECTION only)
 - `+CLAUDE_DESIGN` — Via `--handoff <url>` or refs under `design/.handoff-cache/`
+- `+STACKSHIFT_UI` — Auto-activated under StackShift paired mode (marker file or `arch.isStackShift`). Enforces variant-body hard rules; enables paired-mode body checks in the validator.
+
+## StackShift Paired Mode
+
+Activates when **either** condition is true:
+
+- `.stackshift/installed.json` exists (full StackShift CLI install)
+- `design/design-arch.json` has `isStackShift: true` (set automatically by `--theme stackshift`)
+
+When active, the following behaviors are unified across `invoke.js`, `verify.js`, and `validate-contract.js`:
+
+1. `+STACKSHIFT_UI` modifier injected — adds the variant-body hard-rule addendum to generation context (imports must come from `@stackshift-ui/*`, no raw HTML primitives, no `!important`, no `import React`, no `?? "fallback"`, theme tokens only).
+2. `--no-design-authority` and `--creative` are refused — a project that follows StackShift conventions always needs the standards block.
+3. `+A11Y` auto-activates when the marker file's `a11yRequired` is true or `arch.a11yRequired` is set.
+4. Validator runs additional body-rule checks on the generated component:
+   - **Violations (exit 1):** raw HTML primitives for content, `!important`, `import React`, `import * as` from `@stackshift-ui/...`
+   - **Warnings:** `?? "string"` fallbacks, inline `style={{...}}`, direct `next/image` or `next/link` imports, `@stackshift-ui/system` imported in a variant file
+
+The asymmetry between `.stackshift/installed.json` (full install) and `--theme stackshift` (theme-only) only affects the version string in the report — guardrails behave identically in both modes.
 
 ## Output Format
 

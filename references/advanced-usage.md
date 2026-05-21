@@ -460,6 +460,71 @@ under ~3,000 characters — the injector truncates past that and warns.
 
 See `references/standards/README.md` for the full table.
 
+## StackShift paired mode (1.4.0+)
+
+UI Forge auto-detects projects that follow StackShift conventions and applies a set of variant-body guardrails on top of the existing contract checks.
+
+### Activation triggers
+
+Paired mode (informally "paired-like") activates when **either**:
+
+- `.stackshift/installed.json` exists at the project root — the StackShift CLI is fully installed
+- `design/design-arch.json` has `isStackShift: true` — set automatically by `scan.js --theme stackshift`
+
+Both triggers produce the same behaviour. The marker file additionally carries a `version` string (surfaced in the verify report) and an `a11yRequired` field.
+
+### What changes when active
+
+| Behaviour | Where | Effect |
+|-----------|-------|--------|
+| `+STACKSHIFT_UI` modifier added | `invoke.js` `detectSignals()` | Appears in the `SIGNAL:` header; injects the variant-body hard-rule addendum from `prompt-patterns.md` |
+| Built-in `stackshift-ui/` standards directory injected | `invoke.js` `loadDesignStandards()` | The 9 standards files (import rule, conditional link, props, color tokens, typography, spacing, setup, accessibility, anti-patterns) become available in the DESIGN STANDARDS block |
+| `+A11Y` auto-activation | `invoke.js` | Activates when the marker's `a11yRequired` is true or `arch.a11yRequired` is set |
+| `--no-design-authority` refused | `invoke.js` | Exits with an error — design authority is load-bearing for paired-mode generation |
+| `--creative` refused | `invoke.js` | Exits with an error — a contract is always supplied in paired mode |
+| `--preview` refused | `invoke.js` | Studio preview supersedes the static HTML preview |
+| Validator runs body-rule checks | `packages/variant-contract/validate.js` | See "Body-rule checks" below |
+| Variant Router named export permitted | shared validator | `export { ComponentName }` after default export does not count as a disallowed named export |
+
+### Body-rule checks (validator extension)
+
+Run via `scripts/verify.js` or `scripts/validate-contract.js`. Both routes delegate to `packages/variant-contract/validate.js`, so the rules apply equally to the PostToolUse auto-verify hook, the MCP `forge_verify` tool, and direct CLI invocation.
+
+**Violations (exit 1):**
+
+- Raw HTML primitives for content — `<h1>…<h6>`, `<p>`, `<button>`, `<a>`, `<img>`, `<section>`
+- `!important` in any string
+- `import React from "react"`
+- `import * as X from "@stackshift-ui/..."` (barrel imports break `next/dynamic`)
+
+**Warnings (no exit 1):**
+
+- `?? "fallback string"` on content props
+- Inline `style={{ ... }}` on JSX elements
+- Direct `next/image` or `next/link` import (the provider wires these site-wide)
+- `@stackshift-ui/system` imported in a variant file
+
+Comments and string literals are stripped before pattern matching to avoid false positives on examples inside FORGE NOTES or string constants.
+
+### No opt-out
+
+There is no flag to disable paired-mode behaviour. A project that runs `--theme stackshift` once and later changes direction should:
+
+1. Remove `isStackShift: true` from `design/design-arch.json`, **or**
+2. Remove `.stackshift/installed.json` if the StackShift CLI was installed
+
+Both detections are checked at every invocation; clearing them flips the behaviour off immediately.
+
+### Migrating an existing `--theme stackshift` project to 1.4.0
+
+Existing projects that ran `--theme stackshift` before 1.4.0 already have `design/standards/stackshift-ui/` copied locally. On the next rescan with 1.4.0+, the new `09-anti-patterns.md` file lands in that directory automatically (file-level idempotency in `scan.js`). Existing files are not overwritten.
+
+```bash
+node "$SKILL_ROOT/scripts/cli.js" scan --theme stackshift
+# → copies 09-anti-patterns.md into design/standards/stackshift-ui/
+#   (other 8 files untouched)
+```
+
 ## Brand and Creative signals (0.1.5+)
 
 Two modifiers cover brand discipline and greenfield generation. Both compose

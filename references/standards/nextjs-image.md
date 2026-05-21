@@ -3,6 +3,8 @@
 **Scope:** Applies to any Next.js + Sanity + TypeScript project — not StackShift-specific.
 **Auto-loaded by:** `invoke.js` Step 3 for all projects (not gated by `isStackShift`).
 
+> **Paired-mode interaction (`isStackShift: true`):** When this project follows StackShift conventions, use `<Image>` from `@stackshift-ui/image` instead of importing `next/image` directly. `StackShiftUIProvider` already wires `<Image>` to Next.js Image site-wide, so variant files get the optimizations described here without the direct import. The patterns below (fill prop, urlFor type safety, container shape, sizes attribute) still apply — they live inside the provider's `components/ui/image.tsx` wrapper rather than inside each variant. See `stackshift-ui/01-import-rule.md` and `stackshift-ui/07-setup.md`.
+
 ## `fill` prop pattern (responsive images in containers)
 
 Use Next.js `<Image fill>` inside a container with `position: relative` and explicit dimensions.
