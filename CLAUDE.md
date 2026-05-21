@@ -15,10 +15,49 @@ See **[README.md](./README.md)** for installation, commands, features, and user 
 Edit `skill.version` (plain text, one line, semver), then run:
 
 ```bash
+pnpm sync-version
+# or directly:
 node scripts/sync-version.mjs
 ```
 
-This syncs to `package.json`, `README.md` (`> **Version**` line), and `SKILL.md` frontmatter. Then add a changelog entry in `change-logs/x-x-x-description.md` and update the table in `README.md`.
+This syncs to `package.json`, `cli/package.json`, `README.md` (`> **Version**` line), and `SKILL.md` frontmatter. Then add a changelog entry in `change-logs/x-x-x-description.md` and update the table in `README.md`.
+
+## Workspace layout
+
+UI Forge is a pnpm monorepo:
+
+```
+ui-forge/
+├── bin/cli.mjs              # CLI entrypoint (delegates to cli/dist)
+├── cli/                     # TypeScript installer package (ui-forge-cli)
+│   ├── src/                 # source (not published)
+│   └── dist/                # build output (published)
+├── scripts/                 # runtime (stdlib-only ESM, published)
+├── commands/                # source-of-truth slash command templates
+├── references/              # prompt patterns + standards
+├── themes/                  # theme presets
+├── packages/variant-contract/  # zero-dep contract validator
+└── tests/run-cli-tests.mjs  # integration tests for the installer
+```
+
+Build the installer with `pnpm build`. Runtime stays JS — only `cli/` is TypeScript.
+
+## Installer architecture
+
+See **[tmp/cli-installer-plan.md](./tmp/cli-installer-plan.md)** for the full design. Highlights:
+
+- `cli/src/assets.ts` — typed asset manifest: `RUNTIME_ASSETS.always` + `byFeature` + `byTheme` + `NEVER_COPY` safety net.
+- `cli/src/install.ts` — orchestrates the full flow: prompts → assets → wiring → lockfile.
+- `cli/src/wiring/{commands,permissions,mcp,hooks,project-cli,forgeignore}.ts` — one module per write target.
+- `cli/src/legacy-sweep.ts` — removes pre-1.6.0 artifacts (`scripts/cli.js`, `examples/`, deselected themes) from target skill dirs.
+- `.ui-forge/installed.json` — the lockfile: `written[]` (files), `patched[]` (json keys), `pruned[]` (audit). Drives `repair`/`update`/`uninstall`.
+
+To add a new feature:
+
+1. Add it to `FeatureId` and `RUNTIME_ASSETS.byFeature` in `assets.ts`.
+2. Add a row to `FEATURE_COMMANDS` (if it ships a slash command) and `FEATURE_PERMISSIONS` (allowed scripts).
+3. Drop a `commands/forge-<name>.md` template (the installer substitutes `$CLAUDE_PLUGIN_ROOT` and adds a provenance header).
+4. Add a `step()` to `tests/run-cli-tests.mjs`.
 
 ## Architecture for Developers
 

@@ -1,0 +1,17 @@
+{
+  "name": "ui-forge-cli",
+  "private": true,
+  "version": "1.6.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "node -e \"import('node:fs').then(m => m.rmSync('dist', { recursive: true, force: true }))\""
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.4.0"
+  }
+}

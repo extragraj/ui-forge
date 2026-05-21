@@ -4,7 +4,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org)
 [![Skills Compatible](https://img.shields.io/badge/skills-compatible-blue)](https://github.com/vercel/skills-cli)
 
-> **Version** 1.5.0
+> **Version** 1.6.0
 
 Next.js component generator for Codex CLI, Claude Code, and other AI coding assistants. Converts HTML, TSX, images, and JSON reference materials into production-ready components that match your project's existing design system — using your actual component libraries, Tailwind tokens, and coding conventions.
 
@@ -16,40 +16,55 @@ It accepts any combination of input types (HTML templates, TSX, design images, J
 
 ## Installation
 
+From your project root:
+
 ```bash
-# Installation Command
-npx skills add extragraj/ui-forge
-
-# Claude Code
-npx skills add extragraj/ui-forge -y -g -a claude-code
-
-# Install for both Claude and General Agents (e.g. Codex CLI)
-npx skills add extragraj/ui-forge -y -g -a codex -a claude-code
+pnpm dlx ui-forge init
+# or
+npx ui-forge init
 ```
 
-| Flag | Description |
-|------|-------------|
-| `-y` | Auto-confirm all prompts |
-| `-g` | Install globally — available across all projects |
-| `-a <agent>` | Install for a specific agent runtime |
+This single command:
+- Detects every agentic platform present in your project (`.claude`, `.agents`, `.cursor`, `.codex`, `.copilot`, `.gemini/antigravity`).
+- Lets you pick which features to install (scan + forge are required; verify, export-design, fetch-handoff, mcp-server are optional).
+- Picks a theme preset (`shadcn`, `mantine`, `plain-tailwind`, `stackshift`).
+- Auto-detects StackShift pairing via `.stackshift/installed.json`.
+- Wires per-platform slash commands, scoped Bash permissions, and (optionally) MCP server registration in Claude/Cursor/Codex/Cline.
+- Generates `./ui-forge.mjs` — a portable shim so you can run `node ui-forge.mjs scan` from anywhere in your project.
+- Records every change in `.ui-forge/installed.json` so `repair`, `update`, and `uninstall` are exact.
 
-### Initialize Slash Commands & Permissions
+### Non-interactive / CI
 
-Run once from your project root after installing. Registers slash commands with your agentic CLI and adds Bash tool permissions for all UI Forge scripts.
+Every prompt has a flag equivalent:
 
-**1. sh / bash (macOS · Linux · WSL):**
-```sh
-for d in .claude .agents .github .cursor .codex .copilot; do
-  [ -f "$d/skills/ui-forge/scripts/cli.js" ] && node "$d/skills/ui-forge/scripts/cli.js" install && break
-done
+```bash
+npx ui-forge init --yes \
+  --scope=project \
+  --platforms=claude,cursor \
+  --features=scan,forge,verify \
+  --theme=shadcn \
+  --pair=auto \
+  --mcp=on --mcp-clients=claude-code \
+  --hooks=off \
+  --project-cli=on
 ```
 
-**2. PowerShell (Windows):**
-```powershell
-@('.claude','.agents','.github','.cursor','.codex','.copilot') | % { "$_\skills\ui-forge\scripts\cli.js" } | ? { Test-Path $_ } | select -f 1 | % { node $_ install }
-```
+Run `npx ui-forge --help` for the full list.
 
-Auto-detects the agentic platform and writes slash commands to that platform's directory (`.claude/`, `.agents/`, `.cursor/`, etc.). Re-run any time you switch platforms or reinstall.
+### Subsequent management
+
+| Command | Purpose |
+|---------|---------|
+| `ui-forge init` | Re-run to add/remove features; detects existing lockfile and uses previous selections as defaults |
+| `ui-forge repair` | Re-apply wiring after moving the skill or restoring from CI |
+| `ui-forge update` | Sync wiring to the current `skill.version` |
+| `ui-forge doctor` | Diagnose the install; `--fix` cleans up legacy/stale files |
+| `ui-forge ls` | Summarize the current install |
+| `ui-forge uninstall` | Remove everything UI Forge wrote (leaves your code alone) |
+| `ui-forge migrate` | One-shot migration from a pre-1.6.0 install |
+| `ui-forge mcp-config` | Print the MCP snippet for manual wiring |
+
+### Slash commands wired by `init`
 
 | Command | Description |
 |---------|-------------|
@@ -57,107 +72,50 @@ Auto-detects the agentic platform and writes slash commands to that platform's d
 | `/forge --task "..." --refs <path> --output <path>` | Prepare generation context; AI generates the component |
 | `/forge-verify <component.tsx> <contract.ts>` | Verify a generated component against its contract |
 | `/forge-export-design` | Export design system as a Claude Design–ingestible bundle |
+| `/forge-handoff <url>` | Fetch a Claude Design handoff URL and materialize refs locally |
 
 For other agents that don't support slash commands, they invoke the skill through Bash tool calls instead.
 
-## Bash Invocation (AI Agents)  
+## Terminal Invocation
 
-When an AI agent (like Codex CLI) doesn't support slash commands, it reads SKILL.md to learn how to invoke the skill, then uses Bash tool calls to run `cli.js` with the appropriate command. The agent determines `SKILL_ROOT` by searching for the skill across common install locations (`.claude/`, `.agents/`, global paths, etc.).
-
-When you ask the agent to scan, convert, or verify a component, it handles the full invocation internally. Here's how the skill root is resolved:
+After `ui-forge init`, the project root contains `./ui-forge.mjs` — a portable shim that resolves the skill location at runtime. Use it for any manual invocation:
 
 ```bash
-# Auto-discover (works across all platforms and install locations):
-for d in .claude .agents .github .cursor .codex .copilot; do
-  [ -f "$d/skills/ui-forge/scripts/detect.sh" ] && SKILL_ROOT="$(sh "$d/skills/ui-forge/scripts/detect.sh")" && break
-done
-
-# Or if you know the install path (e.g., .claude/):
-SKILL_ROOT="$(sh .claude/skills/ui-forge/scripts/detect.sh)"
-SKILL_ROOT="$(node .claude/skills/ui-forge/scripts/detect.js)"  # Node.js / Windows
+node ui-forge.mjs scan --quick
+node ui-forge.mjs scan --theme shadcn
+node ui-forge.mjs forge --task "Convert hero" --refs ./hero.html --output ./Hero.tsx
+node ui-forge.mjs verify ./Hero.tsx ./types.ts
+node ui-forge.mjs export
+node ui-forge.mjs handoff <url>
+node ui-forge.mjs mcp        # run the MCP server (stdio)
 ```
 
-Then run any command:
+The shim is safe to commit — `SKILL_ROOT` is resolved at runtime against the project-local install (or global install / `UI_FORGE_SKILL_ROOT` env var as fallback).
 
-```bash
-node "$SKILL_ROOT/scripts/cli.js" install   # wire slash commands + permissions (auto-detects platform)
-node "$SKILL_ROOT/scripts/cli.js" scan --quick
-node "$SKILL_ROOT/scripts/cli.js" scan --theme shadcn
-node "$SKILL_ROOT/scripts/cli.js" forge --task "Convert hero" --refs ./hero.html --output ./Hero.tsx
-node "$SKILL_ROOT/scripts/cli.js" verify ./Hero.tsx ./types.ts
-node "$SKILL_ROOT/scripts/cli.js" export
-node "$SKILL_ROOT/scripts/cli.js" help
-```
+> **Without the shim:** If `./ui-forge.mjs` is missing, you can use `scripts/detect.js` to locate the skill: `node .claude/skills/ui-forge/scripts/detect.js`, then invoke any script directly: `node "<SKILL_ROOT>/scripts/scan.js" --quick`.
 
 ## How the Skill Works
 
-1. **Install once** — Run the Installation steps above to wire slash commands and permissions.
-2. **Scan your project** — Run `/forge-scan` (Claude Code and agents with slash command support) or `node <skill-root>/scripts/cli.js scan` (terminal) to create `design/design-arch.json`. This captures your component libraries, Tailwind tokens, design standards, and conventions. Re-scan when you add libraries or update your theme. The scan runs in two phases: Phase 1 is static analysis (always runs); Phase 2 has the session AI synthesize design patterns from your source files — works with any AI in session (Claude, GPT-4o, Gemini, Codex, etc.).
+1. **Install once** — Run `npx ui-forge init` to wire slash commands, permissions, and the project shim.
+2. **Scan your project** — Run `/forge-scan` (slash command) or `node ui-forge.mjs scan` (terminal) to create `design/design-arch.json`. This captures your component libraries, Tailwind tokens, design standards, and conventions. Re-scan when you add libraries or update your theme. The scan runs in two phases: Phase 1 is static analysis (always runs); Phase 2 has the session AI synthesize design patterns from your source files — works with any AI in session (Claude, GPT-4o, Gemini, Codex, etc.).
 3. **Ask your AI assistant** — Describe what you want to build (e.g., "Convert this hero section to a component"). The skill activates, `invoke.js` prepares structured generation context from your design system, and your AI assistant generates the production-ready component.
 
 The `invoke.js` is a **context-preparation script**. Your coding assistant reads its output and generates the component using its own session.
 
 ## Advanced: Manual Invocation & Inspection
 
-### Resolving SKILL_ROOT in Your Terminal
-
-When running UI Forge commands manually from a terminal, you need to resolve `SKILL_ROOT` to the installed skill location. Use the appropriate command for your shell:
-
-**CMD (Windows Command Prompt):**
-```cmd
-set SKILL_ROOT=%CD%\.claude\skills\ui-forge
-node "%SKILL_ROOT%\scripts\cli.js" scan --quick
-```
-
-**PowerShell (Windows):**
-```powershell
-# Auto-discover approach:
-foreach ($d in ".claude", ".agents", ".github", ".cursor", ".codex", ".copilot") {
-    $path = "$d/skills/ui-forge/scripts/detect.js"
-    if (Test-Path $path) {
-        $SKILL_ROOT = node $path
-        if ($SKILL_ROOT) { break }
-    }
-}
-
-# Or direct approach (if installed under .claude/):
-$SKILL_ROOT = node .claude/skills/ui-forge/scripts/detect.js
-
-node "$SKILL_ROOT/scripts/cli.js" scan --quick
-```
-
-**Bash / Git Bash:**
-```bash
-SKILL_ROOT="$(sh .claude/skills/ui-forge/scripts/detect.sh)"
-node "$SKILL_ROOT/scripts/cli.js" scan --quick
-
-# Or auto-discover across all platforms:
-for d in .claude .agents .github .cursor .codex .copilot; do
-  [ -f "$d/skills/ui-forge/scripts/detect.sh" ] && SKILL_ROOT="$(sh "$d/skills/ui-forge/scripts/detect.sh")" && break
-done
-```
-
-**Zsh (macOS / Linux):**
-```zsh
-SKILL_ROOT="$(sh .claude/skills/ui-forge/scripts/detect.sh)"
-node "$SKILL_ROOT/scripts/cli.js" scan --quick
-
-# Or auto-discover:
-for d in .claude .agents .github .cursor .codex .copilot; do
-  [ -f "$d/skills/ui-forge/scripts/detect.sh" ] && SKILL_ROOT="$(sh "$d/skills/ui-forge/scripts/detect.sh")" && break
-done
-```
+The `./ui-forge.mjs` shim handles skill resolution for you on every supported OS — no `SKILL_ROOT` boilerplate, no per-shell variants. Just `node ui-forge.mjs <command>`.
 
 ### Capturing Generation Context
 
-For debugging or inspecting the generation context, you can capture it to a file:
+For debugging or inspecting the generation context, capture it to a file:
 
 ```bash
-# sh / bash / PowerShell (CMD)
-node "$SKILL_ROOT/scripts/cli.js" forge --task "Convert hero" --refs ./hero.html > forge-output.md
+# sh / bash / zsh / CMD
+node ui-forge.mjs forge --task "Convert hero" --refs ./hero.html > forge-output.md
 
 # PowerShell (explicit UTF-8 — if encoding issues)
-node "$SKILL_ROOT/scripts/cli.js" forge --task "Convert hero" --refs ./hero.html | Out-File -Encoding utf8 forge-output.md
+node ui-forge.mjs forge --task "Convert hero" --refs ./hero.html | Out-File -Encoding utf8 forge-output.md
 ```
 
 Review the captured file to verify the generation context before asking your AI to generate. The file can also be passed as a `--refs` input to another forge run to reuse a known-good context.
@@ -215,7 +173,7 @@ The AI writes `design/forge-page-plan.json`. Review the plan — set `existingPr
 
 The plan file exists — UI Forge detects it and generates each `existingProjectSection: false` section sequentially. To discard the plan and restart Stage 1, pass `--replan`.
 
-> Other agents: use `node "$SKILL_ROOT/scripts/cli.js" forge` instead of `/forge`. See [Other CLIs / Bash](#other-clis--bash) for how to resolve `SKILL_ROOT`.
+> Other agents: use `node ui-forge.mjs forge` instead of `/forge` — the shim resolves `SKILL_ROOT` automatically.
 
 ### Intelligent Token Mapping
 
@@ -297,10 +255,10 @@ See [Built-in Design Standards](./references/standards/README.md) for the full r
 For fresh or greenfield projects, seed `design-arch.json` from a built-in preset instead of waiting for the scanner to find enough to work with:
 
 ```bash
-node "$SKILL_ROOT/scripts/cli.js" scan --theme shadcn       # Tailwind + shadcn/ui
-node "$SKILL_ROOT/scripts/cli.js" scan --theme mantine       # Mantine UI v7
-node "$SKILL_ROOT/scripts/cli.js" scan --theme plain-tailwind  # No component library
-node "$SKILL_ROOT/scripts/cli.js" scan --theme stackshift    # StackShift UI
+node ui-forge.mjs scan --theme shadcn       # Tailwind + shadcn/ui
+node ui-forge.mjs scan --theme mantine       # Mantine UI v7
+node ui-forge.mjs scan --theme plain-tailwind  # No component library
+node ui-forge.mjs scan --theme stackshift    # StackShift UI
 ```
 
 Or with the slash command: `/forge-scan --theme stackshift` (or any other theme)
@@ -317,10 +275,10 @@ Themes are **gap-fill only** — scan findings always win. A theme fills `compon
 
 ```bash
 # Bootstrap globals.css + tailwind.config.ts with StackShift defaults, then scan
-node "$SKILL_ROOT/scripts/cli.js" scan --theme stackshift --theme-override
+node ui-forge.mjs scan --theme stackshift --theme-override
 
 # Skip .bak backup creation
-node "$SKILL_ROOT/scripts/cli.js" scan --theme stackshift --theme-override --no-backup
+node ui-forge.mjs scan --theme stackshift --theme-override --no-backup
 ```
 
 > ⚠️ `--theme-override` modifies project files on disk. `.bak` backup files are created by default. Running again on already-overridden files is idempotent. Non-Google-Fonts `@import` lines are preserved.
@@ -462,6 +420,7 @@ Full release notes are in [`change-logs/`](./change-logs/).
 
 | Version | Date | Notes |
 |---------|------|-------|
+| [1.6.0](./change-logs/1-6-0-cli-installer.md) | 2026-05-21 | First-party install CLI (`pnpm dlx ui-forge init` / `npx ui-forge init`): replaces `scripts/cli.js install` and the legacy `npx skills add` install path. pnpm monorepo with new TypeScript installer in `cli/` (runtime stays stdlib-only JS). Interactive flow via `@clack/prompts` with full non-interactive (`--yes`) and CI-friendly flag equivalents. New commands: `init`, `repair`, `update`, `doctor` (with `--fix` and read-only sweep), `uninstall`, `migrate` (one-shot migration from pre-1.6.0 layout), `ls`, `mcp-config`. Typed asset manifest copies only the runtime files each selected feature needs; never copies dev assets (`cli/src/`, `tests/`, `change-logs/`, `CLAUDE.md`, `examples/`) into target skill dirs. Selective per-feature wiring of slash commands + scoped permissions (one entry per script, POSIX paths) + MCP servers (Claude Code, Cursor, Codex, Cline across Windows/macOS/Linux). Portable runtime-resolving `./ui-forge.mjs` shim at project root (safe to commit). StackShift pairing auto-detected via `.stackshift/installed.json`; stackshift theme runs in limited mode (`themeOverride` stripped, `_limited: true`) when unpaired. Provenance header (`# Generated by ui-forge@<version>`) templated per write so `update` produces clean diffs. Lockfile (`.ui-forge/installed.json`) tracks `written[]`, `patched[]`, and `pruned[]` for exact uninstall and audit. Legacy sweep removes pre-1.6.0 artifacts (`scripts/cli.js`, `examples/`, `tests/`, `change-logs/`, `CLAUDE.md`, deselected theme JSONs) from target dirs on init/doctor. Atomic writes with `.bak` backups on every patched JSON/TOML. Idempotent — re-running `init` with the same selections produces zero diff. Deprecation banner on `scripts/cli.js install` (will be removed in 1.7.0). 59 integration tests covering install, dry-run, idempotency, repair, sweep, doctor, ls, uninstall, stackshift limited-mode, and migrate. |
 | [1.5.0](./change-logs/1-5-0-ai-agnostic-synthesis.md) | 2026-05-21 | AI-agnostic scan synthesis: `/forge-scan` is now a two-phase process. Phase 1 is pure static analysis (always runs, writes `design-arch.json`). Phase 2 delegates synthesis to the **session AI** — whichever model is active (Claude, GPT-4o, Gemini, Codex, etc.) — via `design/.synthesis-request.json`. New `scripts/apply-synthesis.js` validates and patches the arch file. Removed subprocess `claude` CLI invocation from `scan.js` entirely. Works in Claude Code, Cline, Cursor, Codex CLI, and any agentic environment. `--quick` skips Phase 2. 54 new assertions; 209 total. |
 | [1.4.0](./change-logs/1-4-0-paired-mode-body-rules.md) | 2026-05-21 | StackShift paired-mode body rules: new `SIGNAL_STACKSHIFT_UI` prompt-pattern addendum (auto-injected under marker file OR `arch.isStackShift`), new `09-anti-patterns.md` consolidated standard, unified paired-mode detection (`pairedLike`) across `invoke.js` / `verify.js` / `validate-contract.js`, paired-mode body-rule checks in the shared validator (`packages/variant-contract/validate.js` — raw HTML primitives, `!important` in `className`, `import React`, `import * as @stackshift-ui/...` as violations; `?? "fallback"`, inline `style`, direct `next/image`/`next/link`, `@stackshift-ui/system` as warnings; comment/string-literal stripping to prevent false positives), `verify.js` switched to static import (Windows ESM URL bug fix), `validate-contract.js` simplified to delegate to shared validator, `scan.js` `copyBuiltinStandardDir` now file-level idempotent so new upstream standards propagate to existing `--theme stackshift` projects on rescan, `themes/stackshift.json` `colorTokens` aligned with `themeOverride`. 49 new assertions; 155 total across all test files. |
 | [1.3.1](./change-logs/1-3-1-per-platform-skill-path.md) | 2026-05-21 | Multi-platform install fix: `cli.js install` now resolves the skill path **per target platform** instead of using one resolved path for every platform. If the skill is installed at that platform's own location (e.g. `.claude/skills/ui-forge` for the `.claude` platform), the platform-local relative path is used; otherwise it falls back to the actual skill location (other platform's path, or absolute `SKILL_ROOT` for global installs). Each `settings.json`'s Bash permission is now scoped to its own resolved path. Install output surfaces the resolved skill path per target. Verified across 5 scenarios (single-platform local, dual-platform local, global only, global + fresh project, global + local hybrid). |

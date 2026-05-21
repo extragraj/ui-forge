@@ -234,6 +234,12 @@ Commands:
 `.trim());
 }
 
+if (cmd === 'install') {
+  console.error('⚠  `scripts/cli.js install` is deprecated and will be removed in ui-forge 1.7.0.');
+  console.error('   Use the new CLI instead: `pnpm dlx ui-forge init` (or `npx ui-forge init`).');
+  console.error('');
+}
+
 switch (cmd) {
   case 'install':       install(); break;
   case 'scan':          proxy(SCRIPTS.scan); break;

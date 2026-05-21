@@ -3,6 +3,7 @@
  *
  * Reads the canonical version from ./skill.version and syncs it to:
  *   - package.json          (version field)
+ *   - cli/package.json      (version field — installer workspace)
  *   - README.md             (> **Version** x.x.x line)
  *   - SKILL.md              (version: x.x.x in YAML frontmatter)
  *
@@ -12,7 +13,7 @@
  * To bump the version, edit skill.version and re-run this script.
  */
 
-import { readFileSync, writeFileSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync } from 'fs'
 
 const SEMVER = /^\d+\.\d+\.\d+[\w.-]*$/
 
@@ -34,6 +35,15 @@ const pkg = JSON.parse(readFileSync('./package.json', 'utf8'))
 pkg.version = skillVersion
 writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n')
 console.log(`✓  package.json       → ${skillVersion}`)
+
+// ─── cli/package.json ────────────────────────────────────────────────────────
+
+if (existsSync('./cli/package.json')) {
+  const cliPkg = JSON.parse(readFileSync('./cli/package.json', 'utf8'))
+  cliPkg.version = skillVersion
+  writeFileSync('./cli/package.json', JSON.stringify(cliPkg, null, 2) + '\n')
+  console.log(`✓  cli/package.json   → ${skillVersion}`)
+}
 
 // ─── README.md ───────────────────────────────────────────────────────────────
 // Targets the line:  > **Version** x.x.x

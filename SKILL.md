@@ -1,6 +1,6 @@
 ---
 name: ui-forge
-version: 1.5.0
+version: 1.6.0
 description: 'Production Next.js component generator. Converts HTML, TSX, images, and JSON into project-compliant components using your design system. Triggers on component creation, HTML/TSX conversion, page generation, image-to-component tasks, or any frontend code generation request. Requires a one-time scan to build design/design-arch.json.'
 ---
 
@@ -47,11 +47,13 @@ patterns as `'unknown'`.
 
 Works in Claude Code, Cursor, Codex, and other agentic platforms that support slash commands.
 
-Install via the Skills CLI, then run once to wire slash commands and Bash permissions:
+Install via the UI Forge CLI from your project root — wires slash commands, scoped Bash permissions, optional MCP, and a project-root `./ui-forge.mjs` shim in one pass:
 
 ```bash
-node .claude/skills/ui-forge/scripts/cli.js install
+npx ui-forge init    # or: pnpm dlx ui-forge init
 ```
+
+Re-run `ui-forge init` later to add or remove features; `ui-forge repair`, `update`, `doctor`, `uninstall` are also available.
 
 ```
 /forge-scan
@@ -146,49 +148,41 @@ Writes `design/claude-design-bundle/` — a folder with `README.md`, `tokens.jso
 
 ### Other CLIs / Bash (Codex, terminal, CI)
 
-Use `cli.js` as the entry point — it proxies all commands through to the right script with full argument pass-through:
+After `ui-forge init`, the project root contains `./ui-forge.mjs` — a portable shim that resolves the skill location automatically. Use it for any manual invocation:
 
 ```bash
 # Scan
-node .claude/skills/ui-forge/scripts/cli.js scan
-node .claude/skills/ui-forge/scripts/cli.js scan --quick
-node .claude/skills/ui-forge/scripts/cli.js scan --theme shadcn
-node .claude/skills/ui-forge/scripts/cli.js scan --theme stackshift
+node ui-forge.mjs scan
+node ui-forge.mjs scan --quick
+node ui-forge.mjs scan --theme shadcn
+node ui-forge.mjs scan --theme stackshift
 
 # Generate (output goes to stdout; pipe or read it, then generate)
-node .claude/skills/ui-forge/scripts/cli.js forge --task "Convert hero" --refs ./hero.html --output ./Hero.tsx
+node ui-forge.mjs forge --task "Convert hero" --refs ./hero.html --output ./Hero.tsx
 
 # Verify
-node .claude/skills/ui-forge/scripts/cli.js verify ./Hero.tsx ./types.ts
+node ui-forge.mjs verify ./Hero.tsx ./types.ts
 
 # Export design bundle
-node .claude/skills/ui-forge/scripts/cli.js export
+node ui-forge.mjs export
 
-# Help
-node .claude/skills/ui-forge/scripts/cli.js help
+# Fetch a Claude Design handoff
+node ui-forge.mjs handoff <url>
 ```
 
-If the package is installed globally via npm/npx, the `ui-forge` bin is available:
+If the package is installed via npm, the `ui-forge` bin is available globally:
 
 ```bash
-npx extragraj/ui-forge install
-npx extragraj/ui-forge scan --quick
-npx extragraj/ui-forge forge --task "..." --refs ./ref.html --output ./Hero.tsx
+npx ui-forge init       # one-time install
+npx ui-forge ls         # summarize the install
+npx ui-forge doctor     # diagnose
 ```
 
-**Resolving SKILL_ROOT** — Use the auto-discover approach if the skill root location is unknown. Alternatively, if you know the install path (e.g., `.claude/`), you can invoke detect directly:
+**Without the shim:** If `./ui-forge.mjs` is missing, use `scripts/detect.js` to locate the skill:
 
 ```bash
-# Auto-discover (works regardless of install location):
-for d in .claude .agents .github .cursor .codex .copilot; do
-  [ -f "$d/skills/ui-forge/scripts/detect.sh" ] && SKILL_ROOT="$(sh "$d/skills/ui-forge/scripts/detect.sh")" && break
-done
-
-# Or if installed globally or in known location, use directly:
-SKILL_ROOT="$(sh .claude/skills/ui-forge/scripts/detect.sh)"  # if in .claude/
-SKILL_ROOT="$(node .claude/skills/ui-forge/scripts/detect.js)"  # Node.js (works on Windows)
-
-node "$SKILL_ROOT/scripts/cli.js" scan --quick
+SKILL_ROOT="$(node .claude/skills/ui-forge/scripts/detect.js)"
+node "$SKILL_ROOT/scripts/scan.js" --quick
 ```
 
 ### MCP Server (Cline, web clients, any shell-free CLI)
@@ -206,17 +200,19 @@ For CLIs without shell execution — restricted Cline modes, web-based clients, 
 
 Each tool accepts `args: string[]` (passed verbatim to the script) and `project_root: string?` (cwd override).
 
-**One-time setup** — print the snippet for your client:
+**One-time setup** — `ui-forge init` wires MCP automatically when `mcp-server` is selected and the client config exists. To print the snippet for manual wiring:
 
 ```bash
-node .claude/skills/ui-forge/scripts/cli.js mcp-config
+npx ui-forge mcp-config
 ```
 
 Paste the printed `mcpServers` entry into:
 
 | Client | Config file |
 |--------|-------------|
-| Cline (VS Code) | `%APPDATA%\Code\User\globalStorage\saoudrizwan.claude-dev\settings\cline_mcp_settings.json` |
+| Cline (VS Code, Windows) | `%APPDATA%\Code\User\globalStorage\saoudrizwan.claude-dev\settings\cline_mcp_settings.json` |
+| Cline (VS Code, macOS) | `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` |
+| Cline (VS Code, Linux) | `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` |
 | Claude Code | `~/.claude.json` (`mcpServers` key) |
 | Cursor | `~/.cursor/mcp.json` |
 | Codex | `~/.codex/config.toml` (`[mcp_servers.ui-forge]` section) |
