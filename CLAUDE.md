@@ -26,7 +26,8 @@ This syncs to `package.json`, `README.md` (`> **Version**` line), and `SKILL.md`
 
 | Script | Purpose |
 |--------|---------|
-| `scripts/scan.js` | Scans target project; writes `design/design-arch.json` (v3/v4 schema). Emits synthesis banner when Claude CLI unavailable. |
+| `scripts/scan.js` | Scans target project; writes `design/design-arch.json` (v3/v4 schema) and `design/.synthesis-request.json` for Phase 2 session-AI synthesis. |
+| `scripts/apply-synthesis.js` | Receives synthesis JSON from the session AI, validates it, patches `design-arch.json` patterns, deletes `.synthesis-request.json`. |
 | `scripts/invoke.js` | Reads arch, classifies refs, detects signals, composes context to stdout. Auto-migrates v3→v4 on read. |
 | `scripts/validate-contract.js` | Post-gen contract validator for `CONVERT_VARIANT` outputs. Regex-based (no TS compiler). Exit 1 on violations. |
 | `scripts/verify.js` | Extended verifier: static contract checks + optional Playwright screenshot. Single-arg mode auto-detects contract via `// @contract` directive. |

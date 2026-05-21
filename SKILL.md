@@ -1,6 +1,6 @@
 ---
 name: ui-forge
-version: 1.4.0
+version: 1.5.0
 description: 'Production Next.js component generator. Converts HTML, TSX, images, and JSON into project-compliant components using your design system. Triggers on component creation, HTML/TSX conversion, page generation, image-to-component tasks, or any frontend code generation request. Requires a one-time scan to build design/design-arch.json.'
 ---
 
@@ -33,10 +33,13 @@ Contains: component directories, used libraries, Tailwind tokens, global CSS, de
 No API key required by the scripts. Generation context is prepared by `invoke.js`; you
 generate the component from that context.
 
-**Scan synthesis model:** When the `claude` CLI is available (Claude Code, Cursor, AntiGravity, and other agentic platforms),
-`scan.js` uses `claude-haiku-4-5-20251001` for design-system pattern synthesis — fast and
-cost-effective. Falls back to static analysis automatically when the CLI is not found; no
-error and no API key required in either case.
+**Scan synthesis (AI-agnostic):** `/forge-scan` runs a two-phase process. Phase 1 is pure
+static analysis — always runs, writes `design-arch.json`. Phase 2 is performed by the
+session AI (whichever model is active — Claude, GPT-4o, Gemini, Codex, etc.): it reads
+the project files listed in `design/.synthesis-request.json` and synthesizes spacing,
+typography, color tokens, and conventions using its own file-read capability. No subprocess,
+no API key, no `claude` binary required. Pass `--quick` to skip Phase 2 and leave
+patterns as `'unknown'`.
 
 ## Usage
 

@@ -23,9 +23,11 @@
  * Ignore precedence (last wins on conflict):
  *   built-in base → .gitignore → .agentic.ignore → .claude.ignore → .forgeignore → --ignore <file>
  *
- * AI synthesis strategy (in priority order, first available wins):
- *   1. claude CLI  — works in Claude Code without an API key
- *   2. Static only — pure Node.js analysis, no AI synthesis (still useful)
+ * AI synthesis strategy (two-phase):
+ *   Phase 1: static Node.js analysis — always runs, writes design-arch.json
+ *   Phase 2: session AI synthesis    — session AI reads .synthesis-request.json,
+ *            synthesizes, calls apply-synthesis.js. Works with any AI in session
+ *            (Claude, GPT-4o, Gemini, Codex, etc.). Skip with --quick.
  */
 
 import {
@@ -33,7 +35,6 @@ import {
 } from 'fs'
 import { join, relative, extname, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { spawnSync } from 'child_process'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const CLAUDE_SKILL_DIR = join(__dirname, '..')
@@ -547,8 +548,19 @@ function extractDarkTokens(files) {
 }
 
 // ─── AI synthesis ─────────────────────────────────────────────────────────────
+//
+// Synthesis is now a two-phase process:
+//   Phase 1 (scan.js)       — static analysis; writes design-arch.json with
+//                             patterns: { spacing: 'unknown', ... } and emits
+//                             design/.synthesis-request.json for the session AI.
+//   Phase 2 (session AI)    — the calling agent (Claude, GPT-4o, Gemini, Codex,
+//                             etc.) reads .synthesis-request.json, synthesizes
+//                             using its own file-read capability, then calls
+//                             apply-synthesis.js to patch design-arch.json.
+//
+// --quick skips Phase 2 entirely (no .synthesis-request.json written).
 
-const SYNTHESIS_PROMPT = (payload) => `Analyze this Next.js project's design system. Use the Read tool to read each file listed below, then return ONLY valid JSON with no markdown.
+const SYNTHESIS_PROMPT = (payload) => `Analyze this Next.js project's design system. Use your file-read capability to read each file listed below, then return ONLY valid JSON with no markdown fences.
 
 ${payload.claudeMd ? `PROJECT NOTES (CLAUDE.md):\n${payload.claudeMd}\n\n` : ''}DESIGN SYSTEM FILES (read these to understand the design foundation):
 - ${payload.tailwindPath}
@@ -562,68 +574,40 @@ TOP PACKAGES (by import count): ${payload.topPackages}
 After reading the files, return this JSON shape exactly:
 {"spacing":"<1-2 sentences: dominant section/container padding pattern>","typography":"<1-2 sentences: font usage and heading patterns>","colorTokens":"<comma-separated key token names>","conventions":["<up to 5 short conventions>"],"isStackShift":<true|false>}`
 
-function warnSynthesisFallback(reason) {
-  const bar = '═'.repeat(70)
-  process.stderr.write(`\n${bar}\n`)
-  process.stderr.write(`[ui-forge] WARNING: AI synthesis fell back to static analysis\n`)
-  process.stderr.write(`  Reason: ${reason}\n`)
-  process.stderr.write(`  Effect: design-arch.json patterns.spacing / typography / conventions\n`)
-  process.stderr.write(`          will be 'unknown' or coarse heuristics.\n`)
-  process.stderr.write(`  Fix:    ensure 'claude' CLI is on PATH, then re-run scan,\n`)
-  process.stderr.write(`          or pass --quick to skip synthesis silently.\n`)
-  process.stderr.write(`${bar}\n\n`)
-}
-
-function tryClaudeCLI(payload) {
-  // Check if claude CLI is available (Claude Code, Cursor, AntiGravity, etc.)
-  const check = spawnSync('claude', ['--version'], { encoding: 'utf-8', stdio: 'pipe', shell: true })
-  if (check.error || check.status !== 0) {
-    warnSynthesisFallback('claude CLI not found')
-    return null
-  }
-
-  process.stderr.write('  using claude CLI for synthesis\n')
-  const prompt = SYNTHESIS_PROMPT(payload)
-  // Windows fix: pass prompt via stdin (input option) instead of as a -p <prompt> arg.
-  // CMD.exe mangles special chars (& % @ " { }) when concatenated as shell args.
-  // -p without an inline prompt reads from stdin ("useful for pipes" — claude --help).
-  // shell: true retained so Node resolves claude.cmd on Windows.
-  const result = spawnSync(
-    'claude',
-    ['-p', '--no-session-persistence', '--model', 'claude-haiku-4-5-20251001', '--output-format', 'text'],
-    { encoding: 'utf-8', stdio: 'pipe', timeout: 120000, maxBuffer: 512 * 1024, shell: true, input: prompt }
-  )
-  if (result.error) {
-    const reason = result.error?.code === 'ETIMEDOUT'
-      ? 'claude CLI timed out after 120s'
-      : `claude CLI error: ${result.error.message}`
-    warnSynthesisFallback(reason)
-    return null
-  }
-  if (result.status !== 0) {
-    warnSynthesisFallback(`claude CLI exited with code ${result.status}`)
-    return null
+function writeSynthesisRequest(payload) {
+  const requestPath = join(OUT_DIR, '.synthesis-request.json')
+  const request = {
+    _version: 1,
+    _generated: new Date().toISOString(),
+    tailwindPath: payload.tailwindPath,
+    globalCssPath: payload.globalCssPath,
+    componentFiles: payload.componentFiles,
+    topPackages: payload.topPackages,
+    ...(payload.claudeMd ? { claudeMd: payload.claudeMd } : {}),
+    prompt: SYNTHESIS_PROMPT(payload),
   }
   try {
-    return JSON.parse(result.stdout.trim().replace(/```json|```/g, '').trim())
-  } catch {
-    warnSynthesisFallback('claude CLI returned unparseable JSON')
-    return null
+    writeFileSync(requestPath, JSON.stringify(request, null, 2), 'utf-8')
+    process.stderr.write(`  synthesis request written → ${requestPath}\n`)
+    process.stderr.write('  Phase 2: session AI should read design/.synthesis-request.json\n')
+    process.stderr.write('           and call: node scripts/apply-synthesis.js \'<json>\'\n')
+  } catch (e) {
+    process.stderr.write(`  warning: could not write synthesis request — ${e.message}\n`)
   }
 }
 
 function staticFallback(pkgCount) {
-  process.stderr.write('  no AI available — using static analysis only\n')
   const isStackShift = !!(pkgCount['@stackshift-ui'] || pkgCount['@webriq-pagebuilder'])
   return { spacing: 'unknown', typography: 'unknown', colorTokens: '', conventions: [], isStackShift }
 }
 
 function synthesize(payload, pkgCount) {
   if (QUICK_MODE) {
-    process.stderr.write('  --quick mode — skipping claude CLI synthesis\n')
-    return staticFallback(pkgCount)
+    process.stderr.write('  --quick mode — skipping synthesis request\n')
+  } else {
+    writeSynthesisRequest(payload)
   }
-  return tryClaudeCLI(payload) ?? staticFallback(pkgCount)
+  return staticFallback(pkgCount)
 }
 
 // ─── .forgeignore handling for --theme stackshift ──────────────────────────────

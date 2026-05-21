@@ -4,7 +4,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org)
 [![Skills Compatible](https://img.shields.io/badge/skills-compatible-blue)](https://github.com/vercel/skills-cli)
 
-> **Version** 1.4.0
+> **Version** 1.5.0
 
 Next.js component generator for Codex CLI, Claude Code, and other AI coding assistants. Converts HTML, TSX, images, and JSON reference materials into production-ready components that match your project's existing design system — using your actual component libraries, Tailwind tokens, and coding conventions.
 
@@ -92,7 +92,7 @@ node "$SKILL_ROOT/scripts/cli.js" help
 ## How the Skill Works
 
 1. **Install once** — Run the Installation steps above to wire slash commands and permissions.
-2. **Scan your project** — Run `/forge-scan` (Claude Code and agents with slash command support) or `node <skill-root>/scripts/cli.js scan` (terminal) to create `design/design-arch.json`. This captures your component libraries, Tailwind tokens, design standards, and conventions. Re-scan when you add libraries or update your theme.
+2. **Scan your project** — Run `/forge-scan` (Claude Code and agents with slash command support) or `node <skill-root>/scripts/cli.js scan` (terminal) to create `design/design-arch.json`. This captures your component libraries, Tailwind tokens, design standards, and conventions. Re-scan when you add libraries or update your theme. The scan runs in two phases: Phase 1 is static analysis (always runs); Phase 2 has the session AI synthesize design patterns from your source files — works with any AI in session (Claude, GPT-4o, Gemini, Codex, etc.).
 3. **Ask your AI assistant** — Describe what you want to build (e.g., "Convert this hero section to a component"). The skill activates, `invoke.js` prepares structured generation context from your design system, and your AI assistant generates the production-ready component.
 
 The `invoke.js` is a **context-preparation script**. Your coding assistant reads its output and generates the component using its own session.
@@ -308,7 +308,7 @@ Or with the slash command: `/forge-scan --theme stackshift` (or any other theme)
 Themes are **gap-fill only** — scan findings always win. A theme fills `componentLib`, `usedComponents`, `usedLibraries`, `colorTokens`, and `patterns.*` only when the scanner couldn't detect them. The applied theme is recorded as `arch._theme` in `design-arch.json`.
 
 **StackShift Theme Specific Behavior:** `--theme stackshift` does the following beyond gap-fill:
-- Forces `isStackShift: true` in `design-arch.json` so the built-in `stackshift-ui` design standards are always injected at forge time — even on empty codebases, with `--quick`, or when the Claude CLI is unavailable.
+- Forces `isStackShift: true` in `design-arch.json` so the built-in `stackshift-ui` design standards are always injected at forge time — even on empty codebases or with `--quick`.
 - Copies `references/standards/stackshift-ui/` to `design/standards/stackshift-ui/` (project-local, versionable, editable) and records the project-local path under `designStandards["stackshift-ui"]`.
 - Copies general built-in standard (`nextjs-image.md`) to `design/standards/` and auto-registers it. `sample-standard.md` is a template for users to copy, not an active standard — it remains in `references/standards/` as documentation only.
 - Handles `.forgeignore` with three-way logic: creates from StackShift template if missing, overwrites if it's a UI Forge template, or appends StackShift exclusions to an existing custom file.
@@ -462,6 +462,7 @@ Full release notes are in [`change-logs/`](./change-logs/).
 
 | Version | Date | Notes |
 |---------|------|-------|
+| [1.5.0](./change-logs/1-5-0-ai-agnostic-synthesis.md) | 2026-05-21 | AI-agnostic scan synthesis: `/forge-scan` is now a two-phase process. Phase 1 is pure static analysis (always runs, writes `design-arch.json`). Phase 2 delegates synthesis to the **session AI** — whichever model is active (Claude, GPT-4o, Gemini, Codex, etc.) — via `design/.synthesis-request.json`. New `scripts/apply-synthesis.js` validates and patches the arch file. Removed subprocess `claude` CLI invocation from `scan.js` entirely. Works in Claude Code, Cline, Cursor, Codex CLI, and any agentic environment. `--quick` skips Phase 2. 54 new assertions; 209 total. |
 | [1.4.0](./change-logs/1-4-0-paired-mode-body-rules.md) | 2026-05-21 | StackShift paired-mode body rules: new `SIGNAL_STACKSHIFT_UI` prompt-pattern addendum (auto-injected under marker file OR `arch.isStackShift`), new `09-anti-patterns.md` consolidated standard, unified paired-mode detection (`pairedLike`) across `invoke.js` / `verify.js` / `validate-contract.js`, paired-mode body-rule checks in the shared validator (`packages/variant-contract/validate.js` — raw HTML primitives, `!important` in `className`, `import React`, `import * as @stackshift-ui/...` as violations; `?? "fallback"`, inline `style`, direct `next/image`/`next/link`, `@stackshift-ui/system` as warnings; comment/string-literal stripping to prevent false positives), `verify.js` switched to static import (Windows ESM URL bug fix), `validate-contract.js` simplified to delegate to shared validator, `scan.js` `copyBuiltinStandardDir` now file-level idempotent so new upstream standards propagate to existing `--theme stackshift` projects on rescan, `themes/stackshift.json` `colorTokens` aligned with `themeOverride`. 49 new assertions; 155 total across all test files. |
 | [1.3.1](./change-logs/1-3-1-per-platform-skill-path.md) | 2026-05-21 | Multi-platform install fix: `cli.js install` now resolves the skill path **per target platform** instead of using one resolved path for every platform. If the skill is installed at that platform's own location (e.g. `.claude/skills/ui-forge` for the `.claude` platform), the platform-local relative path is used; otherwise it falls back to the actual skill location (other platform's path, or absolute `SKILL_ROOT` for global installs). Each `settings.json`'s Bash permission is now scoped to its own resolved path. Install output surfaces the resolved skill path per target. Verified across 5 scenarios (single-platform local, dual-platform local, global only, global + fresh project, global + local hybrid). |
 | [1.3.0](./change-logs/1-3-0-mcp-server.md) | 2026-05-21 | MCP server: stdlib-only Model Context Protocol server (`scripts/mcp-server.js`) exposes `forge_invoke`, `forge_scan`, `forge_verify`, `forge_export_design` as MCP tools, so agentic CLIs without shell execution (restricted Cline modes, web-based clients) can still use ui-forge. New CLI commands: `ui-forge mcp` (launch server) and `ui-forge mcp-config` (print registration snippet for Cline/Claude Code/Cursor/Codex). JSON-RPC 2.0 over stdio, protocol version `2025-06-18`. 27 end-to-end checks. |

@@ -1,6 +1,6 @@
 {
   "name": "ui-forge",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Production Next.js component generator for Claude Code and AI coding assistants. Standalone for any Next.js project or companion mode for StackShift-paired Sanity sites.",
   "type": "module",
   "bin": {
