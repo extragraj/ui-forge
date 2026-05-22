@@ -11,6 +11,7 @@ import { runUninstall } from './uninstall.js';
 import { runMigrate } from './migrate.js';
 import { runLs } from './ls.js';
 import { runMcpConfig } from './mcp-config.js';
+import { getSkillVersion, getSkillSourceRoot } from './registry.js';
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
@@ -22,6 +23,12 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (flags.command === 'version' || flags.command === '--version' || flags.command === '-v') {
+    console.log(`ui-forge ${getSkillVersion()}`);
+    console.log(`source: ${getSkillSourceRoot()}`);
+    return;
+  }
+
   switch (flags.command) {
     case 'init':
       await runInit(cwd, flags);
@@ -30,7 +37,8 @@ async function main(): Promise<void> {
       await runRepair(cwd, flags);
       return;
     case 'update':
-      await runUpdate(cwd, flags);
+      console.warn('`ui-forge update` is deprecated. Use `ui-forge repair` instead.');
+      await runRepair(cwd, flags);
       return;
     case 'doctor':
       await runDoctor(cwd, flags);

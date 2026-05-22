@@ -48,11 +48,10 @@ export function writeCommands(args) {
     return { written, planned };
 }
 /**
- * Iterate the scope expansions for "both".
+ * Normalize scope to an array. Kept as a function for call-site symmetry;
+ * 'both' is no longer a valid value (removed in 1.6.2).
  */
 export function expandScope(scope) {
-    if (scope === 'both')
-        return ['project', 'global'];
     return [scope];
 }
 /**

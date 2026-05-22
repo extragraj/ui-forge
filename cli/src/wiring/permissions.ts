@@ -13,7 +13,7 @@ import { platformById, platformPaths } from '../platforms.js';
 export interface PermissionsArgs {
   cwd: string;
   homedir: string;
-  scope: 'project' | 'global' | 'both';
+  scope: 'project' | 'global';
   platformIds: string[];
   features: FeatureId[];
   dryRun: boolean;
@@ -26,8 +26,25 @@ export interface PermissionsResult {
 
 const ALWAYS_PERMS = ['scripts/detect.js'];
 
+/**
+ * Build the permission entries for a single script. When the resolved path
+ * contains whitespace (e.g. on Windows under `C:/Users/Garry Caber/...`),
+ * slash commands invoke the script with the path quoted — but Claude Code's
+ * permission matcher compares strings literally, so an unquoted entry won't
+ * match a quoted invocation. We emit BOTH variants for cross-quoting-style
+ * robustness; for paths without whitespace we just emit the bare form.
+ */
+export function permissionEntries(skillRoot: string, scriptRel: string): string[] {
+  const full = posix.join(toPosix(skillRoot), scriptRel);
+  if (/\s/.test(full)) {
+    return [`Bash(node "${full}":*)`, `Bash(node ${full}:*)`];
+  }
+  return [`Bash(node ${full}:*)`];
+}
+
+/** Back-compat — single canonical entry for callers that don't care about quoting variants. */
 export function permissionEntry(skillRoot: string, scriptRel: string): string {
-  return `Bash(node ${posix.join(toPosix(skillRoot), scriptRel)}:*)`;
+  return permissionEntries(skillRoot, scriptRel)[0]!;
 }
 
 export function expectedPermissions(skillRoot: string, features: FeatureId[]): string[] {
@@ -35,7 +52,11 @@ export function expectedPermissions(skillRoot: string, features: FeatureId[]): s
   for (const f of features) {
     for (const s of FEATURE_PERMISSIONS[f] ?? []) scripts.add(s);
   }
-  return Array.from(scripts).map((s) => permissionEntry(skillRoot, s));
+  const out: string[] = [];
+  for (const s of scripts) {
+    for (const e of permissionEntries(skillRoot, s)) out.push(e);
+  }
+  return out;
 }
 
 export function writePermissions(args: PermissionsArgs): PermissionsResult {
@@ -57,9 +78,15 @@ export function writePermissions(args: PermissionsArgs): PermissionsResult {
       const permissions = ((settings.permissions as Record<string, unknown>) ?? {}) as Record<string, unknown>;
       const allow = Array.isArray(permissions.allow) ? (permissions.allow as string[]) : [];
 
-      // Remove any prior ui-forge entries (entries pointing into our skill dir).
+      // Remove any prior ui-forge entries (entries pointing into our skill
+      // dir). Handles both quoted and unquoted forms.
       const skillPosix = toPosix(paths.skillDir);
-      const filtered = allow.filter((e) => !e.includes(`node ${skillPosix}/scripts/`));
+      const filtered = allow.filter((e) => {
+        return (
+          !e.includes(`node ${skillPosix}/scripts/`) &&
+          !e.includes(`node "${skillPosix}/scripts/`)
+        );
+      });
       const merged = Array.from(new Set([...filtered, ...entries])).sort();
 
       permissions.allow = merged;
@@ -95,7 +122,11 @@ export function removePermissionsForSkill(settingsPath: string, skillDirs: strin
   const permissions = (settings.permissions as Record<string, unknown>) ?? {};
   const allow = Array.isArray(permissions.allow) ? (permissions.allow as string[]) : [];
   const skillPosix = skillDirs.map((d) => toPosix(d));
-  const filtered = allow.filter((e) => !skillPosix.some((d) => e.includes(`node ${d}/scripts/`)));
+  const filtered = allow.filter((e) => {
+    return !skillPosix.some(
+      (d) => e.includes(`node ${d}/scripts/`) || e.includes(`node "${d}/scripts/`)
+    );
+  });
   if (filtered.length === allow.length) return false;
   permissions.allow = filtered;
   settings.permissions = permissions;

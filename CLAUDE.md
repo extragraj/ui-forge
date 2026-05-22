@@ -10,6 +10,27 @@ UI Forge is a **Claude Code skill** — a Node.js context-preparation tool that 
 
 See **[README.md](./README.md)** for installation, commands, features, and user documentation.
 
+## Authoring rule — never reference implementation plans
+
+When work is driven by an implementation plan, design doc, scratch
+analysis, or fix-tracking file (typically anything under `tmp/`,
+`drafts/`, `notes/`, or similar), **do not mention or link to that file
+from any shipped artifact** — including but not limited to:
+
+- `change-logs/*.md`
+- `README.md` / `SKILL.md` / `CLAUDE.md`
+- `references/*.md`
+- PR descriptions and commit messages
+
+Reasoning: planning files are working surfaces. They get edited,
+renamed, deleted, or left half-finished — anything that links to them
+rots immediately and confuses future readers. The shipped changelog,
+README, and source code must stand alone. Summarize the rationale in
+the artifact itself instead of pointing readers at a scratch doc.
+
+When in doubt: if the path you're about to write contains `tmp/`, drop
+the reference and inline the relevant context.
+
 ## Versioning
 
 Edit `skill.version` (plain text, one line, semver), then run:
@@ -44,7 +65,7 @@ Build the installer with `pnpm build`. Runtime stays JS — only `cli/` is TypeS
 
 ## Installer architecture
 
-See **[tmp/cli-installer-plan.md](./tmp/cli-installer-plan.md)** for the full design. Highlights:
+Highlights:
 
 - `cli/src/assets.ts` — typed asset manifest: `RUNTIME_ASSETS.always` + `byFeature` + `byTheme` + `NEVER_COPY` safety net.
 - `cli/src/install.ts` — orchestrates the full flow: prompts → assets → wiring → lockfile.

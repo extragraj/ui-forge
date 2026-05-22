@@ -4,8 +4,8 @@
  * process.env.APPDATA — never hardcoded.
  */
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { atomicWrite, backupOnce, readJson, toPosix, writeJson } from '../fs-utils.js';
+import { dirname, join } from 'node:path';
+import { atomicWrite, backupOnce, ensureDir, readJson, toPosix, writeJson } from '../fs-utils.js';
 
 export interface McpClientDef {
   id: string;
@@ -60,6 +60,13 @@ export interface McpPatchArgs {
   skillDir: string;
   clientIds: string[];
   dryRun: boolean;
+  /**
+   * Absolute path to the node binary to encode in the MCP config. Falls back
+   * to bare `'node'` when undefined. Defaults to `process.execPath` so Cline
+   * and similar MCP clients on Windows that launch servers without a shell
+   * PATH still resolve node correctly.
+   */
+  nodePath?: string;
 }
 
 export interface McpPatchResult {
@@ -68,14 +75,28 @@ export interface McpPatchResult {
 }
 
 export function writeMcp(args: McpPatchArgs): McpPatchResult {
-  const { homedir, appdata, platform, skillDir, clientIds, dryRun } = args;
+  const { homedir, appdata, platform, skillDir, clientIds, dryRun, nodePath } = args;
   const patched: { path: string; keys: string[] }[] = [];
   const planned: { path: string; client: string }[] = [];
+
+  // Cline (and other VS Code-embedded MCP hosts) on Windows often launch
+  // servers without inheriting a shell PATH, so bare `node` may not resolve.
+  // Default to the absolute path of the currently-running node binary.
+  const resolvedNode = nodePath ?? process.execPath ?? 'node';
+  const nodeForConfig = toPosix(resolvedNode);
 
   for (const client of CLIENTS) {
     if (!clientIds.includes(client.id)) continue;
     const path = client.configPath({ home: homedir, appdata, platform });
-    if (!existsSync(path)) continue; // Auto-skip missing.
+    if (!existsSync(path)) {
+      // Create minimal config so the MCP entry can be patched in below.
+      if (dryRun) {
+        planned.push({ path, client: client.id });
+        continue;
+      }
+      ensureDir(dirname(path));
+      writeJson(path, { mcpServers: {} });
+    }
     planned.push({ path, client: client.id });
     if (dryRun) continue;
 
@@ -86,14 +107,15 @@ export function writeMcp(args: McpPatchArgs): McpPatchResult {
       const config = safeReadJson(path);
       const root = (config as Record<string, unknown>) ?? {};
       const servers = ((root[client.jsonKey] as Record<string, unknown>) ?? {}) as Record<string, unknown>;
-      servers['ui-forge'] = { command: 'node', args: [mcpServerScript] };
+      servers['ui-forge'] = { command: nodeForConfig, args: [mcpServerScript] };
       root[client.jsonKey] = servers;
       writeJson(path, root);
       patched.push({ path, keys: [`${client.jsonKey}.ui-forge`] });
     } else if (client.format === 'toml') {
       backupOnce(path);
       const existing = readFileSync(path, 'utf8');
-      const block = `\n[mcp_servers.ui-forge]\ncommand = "node"\nargs = ["${mcpServerScript}"]\n`;
+      // TOML escapes: forward slashes are fine; embed paths verbatim.
+      const block = `\n[mcp_servers.ui-forge]\ncommand = "${nodeForConfig}"\nargs = ["${mcpServerScript}"]\n`;
       const cleaned = existing.replace(/\n\[mcp_servers\.ui-forge\][\s\S]*?(?=\n\[|\Z)/g, '');
       atomicWrite(path, cleaned + block);
       patched.push({ path, keys: ['mcp_servers.ui-forge'] });
@@ -149,10 +171,11 @@ export function listMcpClients(): McpClientDef[] {
   return CLIENTS.slice();
 }
 
-export function mcpSnippet(skillDir: string): string {
+export function mcpSnippet(skillDir: string, nodePath?: string): string {
   const script = toPosix(join(skillDir, 'scripts', 'mcp-server.js'));
+  const node = toPosix(nodePath ?? process.execPath ?? 'node');
   return JSON.stringify(
-    { mcpServers: { 'ui-forge': { command: 'node', args: [script] } } },
+    { mcpServers: { 'ui-forge': { command: node, args: [script] } } },
     null,
     2
   );

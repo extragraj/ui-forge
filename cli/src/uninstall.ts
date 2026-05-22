@@ -25,8 +25,9 @@ export async function runUninstall(cwd: string, flags: ParsedFlags): Promise<voi
 
   if (!flags.yes) {
     p.intro('UI Forge Uninstall');
+    const fileCount = lock.written.length;
     const confirm = await p.confirm({
-      message: `This will remove all UI Forge files and wiring (${lock.written.length} files, ${lock.patched.length} patched configs). Continue?`,
+      message: `This will remove all UI Forge files and wiring (${fileCount} files, ${lock.patched.length} patched configs). Continue?`,
       initialValue: false,
     });
     if (p.isCancel(confirm) || !confirm) {

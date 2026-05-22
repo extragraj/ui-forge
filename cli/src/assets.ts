@@ -9,16 +9,38 @@ export type FeatureId =
   | 'verify'
   | 'export-design'
   | 'fetch-handoff'
-  | 'mcp-server';
+  | 'mcp-server'
+  | 'post-tool-verify-hook'
+  | 'project-cli';
 
-export type ThemeId = 'shadcn' | 'mantine' | 'plain-tailwind' | 'stackshift';
+export type ThemeId = 'shadcn' | 'mantine' | 'plain-tailwind' | 'stackshift' | 'none';
 
 export interface ThemeAsset {
   files: string[];
   forgeignore?: string;
 }
 
-export const REQUIRED_FEATURES: FeatureId[] = ['scan', 'forge'];
+export const REQUIRED_FEATURES: FeatureId[] = ['scan', 'forge', 'verify', 'mcp-server'];
+
+/** Human-readable display name for each feature (used in summaries). */
+export const FEATURE_DISPLAY: Record<FeatureId, string> = {
+  scan: 'Scan',
+  forge: 'Forge',
+  verify: 'Verify',
+  'export-design': 'Export Design',
+  'fetch-handoff': 'Fetch Handoff',
+  'mcp-server': 'MCP Server',
+  'post-tool-verify-hook': 'Verify After Edit (Hook)',
+  'project-cli': 'Project CLI Shim',
+};
+
+/**
+ * Standards source dirs to bridge into design/standards/ per theme.
+ * Key: theme ID. Value: subdirectory under references/standards/ to copy.
+ */
+export const STANDARDS_BY_THEME: Partial<Record<ThemeId, string>> = {
+  stackshift: 'stackshift-ui',
+};
 
 export const RUNTIME_ASSETS = {
   always: [
@@ -26,8 +48,12 @@ export const RUNTIME_ASSETS = {
     'scripts/detect.sh',
     'scripts/apply-synthesis.js',
     'references/prompt-patterns.md',
-    'references/standards/',
-    'skill.version',
+    // NOTE: references/standards/ is NOT copied into the skill dir (Issue 10).
+    // Standards live in design/standards/ (seeded by bootstrapDesignStandards at install time).
+    // NOTE: skill.version is NOT copied (1.6.4) — it's source-bundle metadata,
+    // not runtime data. The installed lockfile records the version under
+    // `skillVersion` and the version is stamped into mcp-server.js + the
+    // project-cli shim at install time via the asset transform.
     'SKILL.md',
   ] as string[],
 
@@ -43,6 +69,8 @@ export const RUNTIME_ASSETS = {
     'export-design': ['scripts/export-design.js'],
     'fetch-handoff': ['scripts/fetch-handoff.js'],
     'mcp-server': ['scripts/mcp-server.js'],
+    'post-tool-verify-hook': [], // wiring only; no script assets
+    'project-cli': [],           // wiring only; no script assets
   } as Record<FeatureId, string[]>,
 
   byTheme: {
@@ -53,6 +81,7 @@ export const RUNTIME_ASSETS = {
       files: ['themes/stackshift.json'],
       forgeignore: 'references/default-stackshift-forgeignore.txt',
     },
+    none: { files: [] },
   } as Record<ThemeId, ThemeAsset>,
 
   defaultForgeignore: 'references/default-forgeignore.txt',
@@ -103,6 +132,7 @@ export const FEATURE_PERMISSIONS: Partial<Record<FeatureId, string[]>> = {
   'export-design': ['scripts/export-design.js'],
   'fetch-handoff': ['scripts/fetch-handoff.js'],
   'mcp-server': ['scripts/mcp-server.js'],
+  'post-tool-verify-hook': ['scripts/verify.js'], // hook invokes verify.js
 };
 
 /**

@@ -1,3 +1,4 @@
+# ui-forge:stackshift-baseline — delete this line to mark as user-owned (ui-forge will not replace it)
 #StackShift Workflow Skill
 .stackshift/**
 

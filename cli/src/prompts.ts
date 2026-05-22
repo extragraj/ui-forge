@@ -1,6 +1,20 @@
 /**
  * Interactive prompt flow using @clack/prompts. Falls back to non-interactive
  * mode when --yes or any selection flag is provided.
+ *
+ * Style rule: prompt `message` fields use Title Case. `hint` text uses sentence
+ * case. Option labels use Title Case for the name, sentence case for description.
+ *
+ * Prompt order:
+ *   1. Existing-install note
+ *   2. Pairing detection note
+ *   3. Required features note (Scan, Forge, Verify, MCP Server — always included)
+ *   4. Optional features via groupMultiselect (Claude Exclusives / Automation)
+ *   5. Theme Preset (incl. None)
+ *   6. Quick Scan offer
+ *   7. StackShift pairing question (if not auto-detected)
+ *   8. Agentic Platforms
+ *   9. Install Scope (Project | Global)
  */
 import * as p from '@clack/prompts';
 import { existsSync } from 'node:fs';
@@ -8,39 +22,43 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { FeatureId, ThemeId } from './assets.js';
 import { REQUIRED_FEATURES } from './assets.js';
-import type { ParsedFlags, OnOff, PairMode, Scope } from './flags.js';
+import type { ParsedFlags, Scope } from './flags.js';
 import type { Lockfile } from './lockfile.js';
 import { detectPairing, type PairingState } from './pairing.js';
 import { detectPlatforms, PLATFORMS } from './platforms.js';
 
 export interface InstallSelections {
-  scope: 'project' | 'global' | 'both';
+  scope: 'project' | 'global';
   platforms: string[];
   paired: boolean;
   pairingState: PairingState;
   features: FeatureId[];
   theme: ThemeId;
-  mcpEnabled: boolean;
+  mcpEnabled: boolean;    // derived: features.includes('mcp-server')
   mcpClients: string[];
-  hooksEnabled: boolean;
-  projectCli: boolean;
+  hooksEnabled: boolean;  // derived: features.includes('post-tool-verify-hook')
+  projectCli: boolean;    // derived: features.includes('project-cli')
   forgeignoreSource: string;
+  wantsScan: boolean;
+  /** Pass --theme-override to scan.js (only valid for stackshift). */
+  wantsThemeOverride: boolean;
+  /** Pass --no-backup alongside --theme-override. */
+  wantsNoBackup: boolean;
 }
 
-const ALL_FEATURES: { value: FeatureId; label: string; hint?: string }[] = [
-  { value: 'scan', label: 'scan — scaffold design/design-arch.json', hint: 'required' },
-  { value: 'forge', label: 'forge — invoke component generation', hint: 'required' },
-  { value: 'verify', label: 'verify — contract + standards validation' },
-  { value: 'export-design', label: 'export-design — bundle for Claude Design' },
-  { value: 'fetch-handoff', label: 'fetch-handoff — pull refs from a handoff URL' },
-  { value: 'mcp-server', label: 'mcp-server — MCP tool exposure' },
+const OPTIONAL_FEATURE_IDS: FeatureId[] = [
+  'export-design',
+  'fetch-handoff',
+  'post-tool-verify-hook',
+  'project-cli',
 ];
 
-const ALL_THEMES: { value: ThemeId; label: string }[] = [
-  { value: 'shadcn', label: 'shadcn — Radix + Tailwind defaults' },
-  { value: 'mantine', label: 'mantine — Mantine UI tokens' },
-  { value: 'plain-tailwind', label: 'plain-tailwind — Tailwind, no component lib' },
-  { value: 'stackshift', label: 'stackshift — StackShift design language' },
+const ALL_THEMES: { value: ThemeId; label: string; hint?: string }[] = [
+  { value: 'shadcn',         label: 'Shadcn',         hint: 'Radix + Tailwind defaults' },
+  { value: 'mantine',        label: 'Mantine',         hint: 'Mantine UI tokens' },
+  { value: 'plain-tailwind', label: 'Plain Tailwind',  hint: 'Tailwind, no component lib' },
+  { value: 'stackshift',     label: 'StackShift',      hint: 'StackShift design language' },
+  { value: 'none',           label: 'None',            hint: 'project supplies its own design tokens' },
 ];
 
 function detectedMcpClients(): string[] {
@@ -50,7 +68,6 @@ function detectedMcpClients(): string[] {
     { id: 'cursor', path: join(home, '.cursor', 'mcp.json') },
     { id: 'codex', path: join(home, '.codex', 'config.toml') },
   ];
-  // Cline locations differ per OS.
   const appdata = process.env.APPDATA;
   if (appdata) {
     candidates.push({
@@ -82,31 +99,53 @@ function exit(): never {
 
 function resolveFromFlags(flags: ParsedFlags, prior?: Lockfile): Partial<InstallSelections> {
   const out: Partial<InstallSelections> = {};
-  if (flags.scope) out.scope = flags.scope as 'project' | 'global' | 'both';
+  if (flags.scope) out.scope = flags.scope as 'project' | 'global';
   if (flags.platforms) out.platforms = flags.platforms;
-  if (flags.features) out.features = mergeRequired(flags.features);
   if (flags.theme) out.theme = flags.theme;
-  if (flags.mcp) out.mcpEnabled = flags.mcp === 'on';
+
+  let features: FeatureId[] | undefined = flags.features ? mergeRequired([...flags.features]) : undefined;
+
+  // Back-compat: legacy --hooks=on / --project-cli=on / --mcp=on flags
+  if (features) {
+    if (flags.hooks === 'on' && !features.includes('post-tool-verify-hook')) features.push('post-tool-verify-hook');
+    if (flags.projectCli === 'on' && !features.includes('project-cli')) features.push('project-cli');
+    if (flags.mcp === 'on' && !features.includes('mcp-server')) features.push('mcp-server');
+  }
+  if (features) out.features = features;
   if (flags.mcpClients) out.mcpClients = flags.mcpClients;
-  if (flags.hooks) out.hooksEnabled = flags.hooks === 'on';
-  if (flags.projectCli) out.projectCli = flags.projectCli === 'on';
+
   if (prior && flags.yes) {
     out.scope ??= prior.scope;
     out.platforms ??= prior.platforms;
-    out.features ??= prior.features;
+    out.features ??= migrateFeatures(prior);
     out.theme ??= prior.theme;
-    out.mcpEnabled ??= prior.mcpClients.length > 0;
     out.mcpClients ??= prior.mcpClients;
-    out.hooksEnabled ??= prior.hooks.postToolUseVerify || prior.hooks.stackshiftValidate;
-    out.projectCli ??= prior.projectCli;
   }
   return out;
+}
+
+/** Migrate pre-1.6.2 lockfiles: pull projectCli + hook out of old boolean fields. */
+function migrateFeatures(prior: Lockfile): FeatureId[] {
+  const base = [...prior.features];
+  if (prior.projectCli && !base.includes('project-cli')) base.push('project-cli');
+  if (prior.hooks?.postToolUseVerify && !base.includes('post-tool-verify-hook')) base.push('post-tool-verify-hook');
+  return mergeRequired(base);
 }
 
 function mergeRequired(features: FeatureId[]): FeatureId[] {
   const set = new Set(features);
   for (const r of REQUIRED_FEATURES) set.add(r);
   return Array.from(set);
+}
+
+function deriveFromFeatures(features: FeatureId[], mcpClients: string[]): Pick<InstallSelections, 'mcpEnabled' | 'mcpClients' | 'hooksEnabled' | 'projectCli'> {
+  const mcpEnabled = features.includes('mcp-server');
+  return {
+    mcpEnabled,
+    mcpClients: mcpEnabled ? mcpClients : [],
+    hooksEnabled: features.includes('post-tool-verify-hook'),
+    projectCli: features.includes('project-cli'),
+  };
 }
 
 /**
@@ -124,7 +163,6 @@ export async function collectSelections(
     return detectPairing(cwd);
   })();
 
-  // If --yes or all required selections came via flags, skip interactive prompts.
   const canSkipPrompts =
     flags.yes ||
     (overrides.scope && overrides.platforms && overrides.features && overrides.theme);
@@ -137,9 +175,8 @@ export async function collectSelections(
 
   if (prior) {
     p.note(
-      `Existing install found at .ui-forge/installed.json (v${prior.skillVersion}).\n` +
-        `Re-running init will let you modify the selection.`,
-      'Existing install'
+      `Existing install found (v${prior.skillVersion}).\nRe-running init lets you update the selection.`,
+      'Existing Install'
     );
   }
   if (pairing.paired) {
@@ -148,26 +185,121 @@ export async function collectSelections(
     p.note('.stackshift/installed.json is invalid — treating as unpaired. Run `stackshift doctor`.', 'Pairing');
   }
 
-  // Scope
-  const scope =
-    overrides.scope ??
-    ((await p.select({
-      message: 'Install scope',
-      initialValue: prior?.scope ?? 'project',
-      options: [
-        { value: 'project', label: 'Project (.claude/skills/ui-forge in cwd)' },
-        { value: 'global', label: 'Global (~/.claude/skills/ui-forge)' },
-        { value: 'both', label: 'Both (project + global)' },
-      ],
-    })) as Scope);
-  if (isCancel(scope)) exit();
+  // 1. Required features note (always included, no prompt)
+  if (!overrides.features) {
+    p.note(
+      '  Scan         — project design scanner\n' +
+      '  Forge        — component generator\n' +
+      '  Verify       — contract + standards validation\n' +
+      '  MCP Server   — MCP tool exposure for agents',
+      'Required (always included)'
+    );
+  }
 
-  // Platforms
+  // 2. Optional features via groupMultiselect
+  let finalFeatures: FeatureId[];
+  if (overrides.features) {
+    finalFeatures = overrides.features;
+  } else {
+    const defaultOptional: FeatureId[] = prior
+      ? migrateFeatures(prior).filter((f) => OPTIONAL_FEATURE_IDS.includes(f))
+      : ['project-cli'];
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rawOptional = await (p.groupMultiselect as any)({
+      message: 'Optional Features',
+      initialValues: defaultOptional,
+      options: {
+        'Automation': [
+          { value: 'post-tool-verify-hook', label: 'Verify After Edit (Hook)', hint: 'auto-run verify.js after edits' },
+          { value: 'project-cli',           label: 'Project CLI Shim',         hint: './ui-forge.mjs convenience wrapper' },
+        ],
+        'Claude Exclusives': [
+          { value: 'export-design',  label: 'Export Design',  hint: 'bundle for Claude Design' },
+          { value: 'fetch-handoff',  label: 'Fetch Handoff',  hint: 'pull refs from a handoff URL' },
+        ],
+      },
+      required: false,
+    });
+    if (isCancel(rawOptional)) exit();
+
+    const optionalSelected = (rawOptional as string[]).filter((v) =>
+      OPTIONAL_FEATURE_IDS.includes(v as FeatureId)
+    ) as FeatureId[];
+
+    finalFeatures = mergeRequired(optionalSelected);
+  }
+
+  // 3. Theme Preset (incl. None)
+  const theme = overrides.theme ?? ((await p.select({
+    message: 'Theme Preset',
+    initialValue: prior?.theme ?? (pairing.paired ? 'stackshift' : 'shadcn'),
+    options: ALL_THEMES.map((t) => ({ value: t.value, label: t.label, hint: t.hint })),
+  })) as ThemeId);
+  if (isCancel(theme)) exit();
+
+  // 4. Quick Scan decision
+  // - Theme selected → scan automatically (theme was chosen for a reason)
+  // - Theme = None → ask the user (they may not have a tailwind config yet)
+  let wantsScan = false;
+  if (flags.quickScan === 'on') {
+    wantsScan = true;
+  } else if (flags.quickScan === 'off') {
+    wantsScan = false;
+  } else if (theme !== 'none') {
+    wantsScan = true; // auto-scan when a theme is chosen
+    p.note('A quick scan will run after install to capture your design tokens.', 'Auto Scan');
+  } else {
+    // theme = 'none' — always ask; scan is still useful for globals.css / custom tokens.
+    const ans = await p.confirm({
+      message: 'Run a quick scan after install? (local-only, no AI synthesis)',
+      initialValue: false,
+    });
+    if (isCancel(ans)) exit();
+    wantsScan = ans;
+  }
+
+  // 4.5. Theme override (StackShift only — destructive). Opt-in.
+  let wantsThemeOverride = false;
+  let wantsNoBackup = flags.noBackup;
+  if (flags.themeOverride) {
+    wantsThemeOverride = theme === 'stackshift';
+  } else if (theme === 'stackshift') {
+    const apply = await p.confirm({
+      message: 'Apply StackShift Theme Override To globals.css And tailwind.config?',
+      initialValue: false,
+    });
+    if (isCancel(apply)) exit();
+    wantsThemeOverride = apply;
+    if (apply) {
+      const skipBackup = await p.confirm({
+        message: 'Skip .bak Backups Of Modified Files?',
+        initialValue: false,
+      });
+      if (isCancel(skipBackup)) exit();
+      wantsNoBackup = skipBackup;
+    }
+  }
+
+  // 5. StackShift pairing (if not auto-detected)
+  let pairedFinal = pairing.paired;
+  if (!pairing.paired && !pairing.invalid && flags.pair !== 'on' && flags.pair !== 'off') {
+    const manual = await p.confirm({
+      message: 'Is This Project Paired With StackShift?',
+      initialValue: false,
+    });
+    if (isCancel(manual)) exit();
+    pairedFinal = manual;
+  }
+  if (flags.pair === 'on') pairedFinal = true;
+  if (flags.pair === 'off') pairedFinal = false;
+
+  // 6. Agentic Platforms
   const detected = detectPlatforms(cwd).map((pl) => pl.id);
   const platforms =
     overrides.platforms ??
     ((await p.multiselect({
-      message: 'Target platforms',
+      message: 'Agentic Platforms',
       initialValues: prior?.platforms ?? (detected.length > 0 ? detected : ['claude']),
       options: PLATFORMS.map((pl) => ({
         value: pl.id,
@@ -177,102 +309,45 @@ export async function collectSelections(
     })) as string[]);
   if (isCancel(platforms)) exit();
 
-  // Manual pairing prompt if not detected
-  let pairedFinal = pairing.paired;
-  if (!pairing.paired && !pairing.invalid && flags.pair !== 'on' && flags.pair !== 'off') {
-    const manual = await p.confirm({
-      message: 'Is this project paired with StackShift?',
-      initialValue: false,
-    });
-    if (isCancel(manual)) exit();
-    pairedFinal = manual;
-  }
-  if (flags.pair === 'on') pairedFinal = true;
-  if (flags.pair === 'off') pairedFinal = false;
+  // 7. Install Scope (Project | Global)
+  const scope =
+    overrides.scope ??
+    ((await p.select({
+      message: 'Install Scope',
+      initialValue: prior?.scope ?? 'project',
+      options: [
+        { value: 'project', label: 'Project', hint: '.claude/skills/ui-forge in cwd' },
+        { value: 'global',  label: 'Global',  hint: '~/.claude/skills/ui-forge' },
+      ],
+    })) as Scope);
+  if (isCancel(scope)) exit();
 
-  // Features
-  const features = overrides.features ?? ((await p.multiselect({
-    message: 'Features to install',
-    initialValues:
-      prior?.features ??
-      (['scan', 'forge', 'verify'] as FeatureId[]),
-    options: ALL_FEATURES.map((f) => ({
-      value: f.value,
-      label: f.label,
-      hint: REQUIRED_FEATURES.includes(f.value) ? 'required' : undefined,
-    })),
-    required: true,
-  })) as FeatureId[]);
-  if (isCancel(features)) exit();
-  const finalFeatures = mergeRequired(features);
-
-  // Theme
-  const theme = overrides.theme ?? ((await p.select({
-    message: 'Theme preset',
-    initialValue: prior?.theme ?? (pairedFinal ? 'stackshift' : 'shadcn'),
-    options: ALL_THEMES,
-  })) as ThemeId);
-  if (isCancel(theme)) exit();
-
-  // MCP
+  // Auto-wire all detected MCP clients (Issue 5)
   const availableMcp = detectedMcpClients();
-  let mcpEnabled = overrides.mcpEnabled ?? false;
-  let mcpClients = overrides.mcpClients ?? [];
+  const mcpClients: string[] =
+    overrides.mcpClients ??
+    (finalFeatures.includes('mcp-server') && availableMcp.length > 0 ? availableMcp : []);
+
   if (finalFeatures.includes('mcp-server') && availableMcp.length > 0) {
-    const ask = await p.confirm({
-      message: `Wire UI Forge MCP server into detected clients (${availableMcp.join(', ')})?`,
-      initialValue: true,
-    });
-    if (isCancel(ask)) exit();
-    mcpEnabled = ask;
-    if (mcpEnabled && !overrides.mcpClients) {
-      const sel = await p.multiselect({
-        message: 'Which MCP clients?',
-        initialValues: availableMcp,
-        options: availableMcp.map((id) => ({ value: id, label: id })),
-        required: true,
-      });
-      if (isCancel(sel)) exit();
-      mcpClients = sel as string[];
-    }
+    p.note(`MCP Server will be wired to: ${availableMcp.join(', ')}`, 'MCP Clients');
   }
 
-  // Project CLI shim
-  let projectCli = overrides.projectCli ?? true;
-  if (overrides.projectCli === undefined) {
-    const ans = await p.confirm({
-      message: 'Create ./ui-forge.mjs at project root for easy local invocation?',
-      initialValue: true,
-    });
-    if (isCancel(ans)) exit();
-    projectCli = ans;
-  }
+  p.outro('Selections complete — applying…');
 
-  // Hooks
-  let hooksEnabled = overrides.hooksEnabled ?? false;
-  if (overrides.hooksEnabled === undefined && finalFeatures.includes('verify')) {
-    const ans = await p.confirm({
-      message: 'Install PostToolUse hook to auto-run verify.js after edits?',
-      initialValue: false,
-    });
-    if (isCancel(ans)) exit();
-    hooksEnabled = ans;
-  }
-
-  p.outro('Selections collected — applying…');
+  const derived = deriveFromFeatures(finalFeatures, mcpClients);
 
   return {
-    scope: scope as 'project' | 'global' | 'both',
+    scope: scope as 'project' | 'global',
     platforms: platforms as string[],
     paired: pairedFinal,
     pairingState: pairing,
     features: finalFeatures,
     theme: theme as ThemeId,
-    mcpEnabled,
-    mcpClients,
-    hooksEnabled,
-    projectCli,
-    forgeignoreSource: '', // filled in by install.ts via resolveAssets
+    ...derived,
+    forgeignoreSource: '',
+    wantsScan,
+    wantsThemeOverride,
+    wantsNoBackup,
   };
 }
 
@@ -282,12 +357,12 @@ function buildSelections(
   pairing: PairingState,
   flags: ParsedFlags
 ): InstallSelections {
-  const features = mergeRequired(overrides.features ?? (['scan', 'forge', 'verify'] as FeatureId[]));
+  const features = mergeRequired(overrides.features ?? (['project-cli'] as FeatureId[]));
   const theme = overrides.theme ?? (pairing.paired ? ('stackshift' as ThemeId) : ('shadcn' as ThemeId));
   const detected = detectedMcpClients();
-  const mcpEnabled =
-    overrides.mcpEnabled ?? (features.includes('mcp-server') && detected.length > 0);
-  const mcpClients = overrides.mcpClients ?? (mcpEnabled ? detected : []);
+  const mcpClients = overrides.mcpClients ?? (features.includes('mcp-server') && detected.length > 0 ? detected : []);
+  const derived = deriveFromFeatures(features, mcpClients);
+
   return {
     scope: overrides.scope ?? 'project',
     platforms: overrides.platforms ?? ['claude'],
@@ -295,10 +370,13 @@ function buildSelections(
     pairingState: pairing,
     features,
     theme,
-    mcpEnabled,
-    mcpClients,
-    hooksEnabled: overrides.hooksEnabled ?? false,
-    projectCli: overrides.projectCli ?? true,
+    ...derived,
     forgeignoreSource: '',
+    wantsScan: flags.quickScan === 'on',
+    // Non-interactive guard: only honor --theme-override when the user
+    // explicitly passed it AND the theme is stackshift. Never silently rewrite
+    // globals.css / tailwind.config under --yes.
+    wantsThemeOverride: flags.themeOverride && theme === 'stackshift',
+    wantsNoBackup: flags.noBackup,
   };
 }

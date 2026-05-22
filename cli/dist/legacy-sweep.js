@@ -18,6 +18,7 @@ const LEGACY_PATTERNS = [
     { rx: /^cli\/src\//, reason: 'legacy-pattern: TS source (never runtime)' },
     { rx: /^cli\/tsconfig/, reason: 'legacy-pattern: dev TS config' },
     { rx: /^references\/examples\//, reason: 'legacy-pattern: pre-1.6.0 examples' },
+    { rx: /^references\/standards\//, reason: 'legacy-pattern: pre-1.6.2 standards (now in design/standards/)' },
     { rx: /\.bak$/, reason: 'stale: .bak backup' },
     { rx: /\.tmp$/, reason: 'stale: .tmp aborted write' },
     { rx: /^\.DS_Store$|\/\.DS_Store$/, reason: 'os-noise: .DS_Store' },
@@ -40,7 +41,7 @@ function expectedFiles(features, theme) {
         for (const e of RUNTIME_ASSETS.byFeature[f] ?? [])
             add(e);
     }
-    for (const e of RUNTIME_ASSETS.byTheme[theme].files)
+    for (const e of (RUNTIME_ASSETS.byTheme[theme]?.files ?? []))
         add(e);
     return set;
 }

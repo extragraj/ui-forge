@@ -4,7 +4,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org)
 [![Skills Compatible](https://img.shields.io/badge/skills-compatible-blue)](https://github.com/vercel/skills-cli)
 
-> **Version** 1.6.0
+> **Version** 1.6.7
 
 Next.js component generator for Codex CLI, Claude Code, and other AI coding assistants. Converts HTML, TSX, images, and JSON reference materials into production-ready components that match your project's existing design system — using your actual component libraries, Tailwind tokens, and coding conventions.
 
@@ -19,50 +19,113 @@ It accepts any combination of input types (HTML templates, TSX, design images, J
 From your project root:
 
 ```bash
-pnpm dlx ui-forge init
+pnpm dlx @extragraj/ui-forge init
 # or
-npx ui-forge init
+npx @extragraj/ui-forge init
 ```
 
-This single command:
-- Detects every agentic platform present in your project (`.claude`, `.agents`, `.cursor`, `.codex`, `.copilot`, `.gemini/antigravity`).
-- Lets you pick which features to install (scan + forge are required; verify, export-design, fetch-handoff, mcp-server are optional).
-- Picks a theme preset (`shadcn`, `mantine`, `plain-tailwind`, `stackshift`).
-- Auto-detects StackShift pairing via `.stackshift/installed.json`.
-- Wires per-platform slash commands, scoped Bash permissions, and (optionally) MCP server registration in Claude/Cursor/Codex/Cline.
-- Generates `./ui-forge.mjs` — a portable shim so you can run `node ui-forge.mjs scan` from anywhere in your project.
-- Records every change in `.ui-forge/installed.json` so `repair`, `update`, and `uninstall` are exact.
+Re-run `npx @extragraj/ui-forge init` at any time to add or remove features — the lockfile pre-fills your previous selections as defaults.
+
+```
+npx @extragraj/ui-forge init
+          │
+          ▼
+ ┌─ DETECT ─────────────────────────────────────────────────────────────┐
+ │  Existing lockfile?   → pre-fills previous selections as defaults    │
+ │  .stackshift present? → enables pairing + +A11Y enforcement          │
+ │  Platform dirs found? → pre-selects detected platforms               │
+ └──────────────────────────────────────────────────────────────────────┘
+          │
+          ▼
+ ┌─ PROMPTS ────────────────────────────────────────────────────────────┐
+ │                                                                       │
+ │  1  Required (locked)   Scan · Forge · Verify · MCP Server           │
+ │                                                                       │
+ │  2  Optional features                                                 │
+ │       Automation      → Verify After Edit Hook                        │
+ │                          Project CLI Shim (./ui-forge.mjs)            │
+ │       Claude Excl.    → Export Design                                 │
+ │                          Fetch Handoff                                │
+ │                                                                       │
+ │  3  Theme preset        shadcn · mantine · plain-tailwind ·           │
+ │                         stackshift · none                             │
+ │                                                                       │
+ │  4  Theme override      StackShift only — rewrites globals.css        │
+ │                         + tailwind.config.* before scan               │
+ │                                                                       │
+ │  5  StackShift pairing  auto-detected or manual confirm               │
+ │                                                                       │
+ │  6  Agentic platforms   .claude · .cursor · .codex · .agents          │
+ │                         .copilot · .gemini/antigravity                │
+ │                                                                       │
+ │  7  Install scope       project → .claude/skills/ui-forge in cwd     │
+ │                         global  → ~/.claude/skills/ui-forge           │
+ │                                                                       │
+ └──────────────────────────────────────────────────────────────────────┘
+          │
+          ▼
+ ┌─ APPLIES ────────────────────────────────────────────────────────────┐
+ │                                                                       │
+ │  ✦  Copy feature files to skill dir (no dev assets / test files)     │
+ │  ✦  Write slash commands + scoped Bash permissions per platform       │
+ │  ✦  Register MCP server in detected client configs (abs. Node path)  │
+ │  ✦  Bootstrap design/standards/ from selected theme                  │
+ │  ✦  Generate ./ui-forge.mjs portable shim (safe to commit)           │
+ │  ✦  Run quick scan → seed design/design-arch.json immediately        │
+ │  ✦  Stamp provenance headers on all wired files                      │
+ │  ✦  Legacy sweep: prune pre-1.6.0 artifacts + deselected features    │
+ │  ✦  Save .ui-forge/installed.json — idempotent, exact uninstall      │
+ │                                                                       │
+ └──────────────────────────────────────────────────────────────────────┘
+```
 
 ### Non-interactive / CI
 
-Every prompt has a flag equivalent:
+**StackShift — recommended full install:**
 
 ```bash
-npx ui-forge init --yes \
+npx @extragraj/ui-forge init --yes \
   --scope=project \
-  --platforms=claude,cursor \
-  --features=scan,forge,verify \
-  --theme=shadcn \
-  --pair=auto \
-  --mcp=on --mcp-clients=claude-code \
-  --hooks=off \
-  --project-cli=on
+  --platforms=claude \
+  --features=scan,forge,verify,mcp-server,export-design,fetch-handoff,post-tool-verify-hook,project-cli \
+  --theme=stackshift \
+  --pair=on \
+  --theme-override \
+  --quick-scan=on
 ```
 
-Run `npx ui-forge --help` for the full list.
+**All `init` flags:**
+
+| Flag | Values | Description |
+|------|--------|-------------|
+| `-y, --yes` | — | Accept all defaults non-interactively |
+| `--scope` | `project` \| `global` | Install location: project-local (`.claude/skills/ui-forge`) or global (`~/.claude/skills/ui-forge`) |
+| `--platforms` | csv | Platforms to wire: `claude`, `cursor`, `agents`, `codex`, `copilot`, `gemini` |
+| `--features` | csv | Features: `scan`, `forge`, `verify`, `mcp-server`, `export-design`, `fetch-handoff`, `post-tool-verify-hook`, `project-cli` |
+| `--theme` | `shadcn` \| `mantine` \| `plain-tailwind` \| `stackshift` \| `none` | Seed `design-arch.json` with theme-specific tokens and conventions |
+| `--pair` | `auto` \| `on` \| `off` | StackShift pairing; `auto` reads `.stackshift/installed.json` |
+| `--mcp` | `on` \| `off` | Enable/disable MCP wiring (prefer `mcp-server` in `--features`) |
+| `--mcp-clients` | csv | Subset of detected clients to wire: `claude-code`, `cursor`, `codex`, `cline` |
+| `--quick-scan` | `on` \| `off` | Run a quick scan immediately after install |
+| `--theme-override` | — | StackShift only: rewrite `globals.css` + `tailwind.config.*` with StackShift tokens before scanning |
+| `--no-backup` | — | Skip `.bak` backups when `--theme-override` runs |
+| `--force-forgeignore` | — | Overwrite a user-owned `.forgeignore` on re-install |
+| `--dry-run` | — | Print planned actions; write nothing to disk |
+| `--prune-unknown` | — | Auto-delete unrecognized files during legacy sweep |
+| `-h, --help` | — | Show help |
 
 ### Subsequent management
 
 | Command | Purpose |
 |---------|---------|
-| `ui-forge init` | Re-run to add/remove features; detects existing lockfile and uses previous selections as defaults |
-| `ui-forge repair` | Re-apply wiring after moving the skill or restoring from CI |
-| `ui-forge update` | Sync wiring to the current `skill.version` |
-| `ui-forge doctor` | Diagnose the install; `--fix` cleans up legacy/stale files |
-| `ui-forge ls` | Summarize the current install |
-| `ui-forge uninstall` | Remove everything UI Forge wrote (leaves your code alone) |
-| `ui-forge migrate` | One-shot migration from a pre-1.6.0 install |
-| `ui-forge mcp-config` | Print the MCP snippet for manual wiring |
+| `npx @extragraj/ui-forge init` | Re-run to add/remove features; detects existing lockfile and uses previous selections as defaults |
+| `npx @extragraj/ui-forge repair` | Re-apply wiring from the lockfile — use after moving the skill or restoring from CI |
+| `npx @extragraj/ui-forge doctor` | Diagnose the install; `--fix` runs a full repair after diagnosis |
+| `npx @extragraj/ui-forge ls` | Summarize the current install |
+| `npx @extragraj/ui-forge version` | Print the bundled skill version and source location |
+| `npx @extragraj/ui-forge uninstall` | Remove everything UI Forge wrote (leaves your code alone) |
+| `npx @extragraj/ui-forge migrate` | One-shot migration from a pre-1.6.0 install |
+| `npx @extragraj/ui-forge mcp-config` | Print the MCP server snippet for manual wiring |
 
 ### Slash commands wired by `init`
 
@@ -96,7 +159,7 @@ The shim is safe to commit — `SKILL_ROOT` is resolved at runtime against the p
 
 ## How the Skill Works
 
-1. **Install once** — Run `npx ui-forge init` to wire slash commands, permissions, and the project shim.
+1. **Install once** — Run `npx @extragraj/ui-forge init` to wire slash commands, permissions, and the project shim.
 2. **Scan your project** — Run `/forge-scan` (slash command) or `node ui-forge.mjs scan` (terminal) to create `design/design-arch.json`. This captures your component libraries, Tailwind tokens, design standards, and conventions. Re-scan when you add libraries or update your theme. The scan runs in two phases: Phase 1 is static analysis (always runs); Phase 2 has the session AI synthesize design patterns from your source files — works with any AI in session (Claude, GPT-4o, Gemini, Codex, etc.).
 3. **Ask your AI assistant** — Describe what you want to build (e.g., "Convert this hero section to a component"). The skill activates, `invoke.js` prepares structured generation context from your design system, and your AI assistant generates the production-ready component.
 
@@ -123,6 +186,33 @@ Review the captured file to verify the generation context before asking your AI 
 > **Windows note:** The `invoke.js` forces UTF-8 encoding on piped stdout, so `>` redirection in CMD and PowerShell produces clean UTF-8 output. If you see garbled text (characters spaced out), use the `Out-File -Encoding utf8` variant above.
 
 ## Features
+
+### Installable Features
+
+The `init` command installs a set of features into your target platform directories. Required features are always included; optional features can be toggled on any re-install.
+
+**Required — always included**
+
+| Feature | Installed file(s) | Slash command |
+|---------|------------------|---------------|
+| **Scan** | `scripts/scan.js` — scans project → `design/design-arch.json` | `/forge-scan` |
+| **Forge** | `scripts/invoke.js` — prepares generation context → stdout | `/forge` |
+| **Verify** | `scripts/verify.js`, `scripts/validate-contract.js`, `packages/variant-contract/` | `/forge-verify` |
+| **MCP Server** | `scripts/mcp-server.js` — JSON-RPC 2.0 stdio server; auto-registered in detected Claude Code, Cursor, Codex, and Cline configs | — |
+
+**Optional — Automation**
+
+| Feature | What it wires | Notes |
+|---------|--------------|-------|
+| **Verify After Edit Hook** | `PostToolUse` entry in `settings.json` | Runs `verify.js` automatically after every file edit; no script file copied |
+| **Project CLI Shim** | `./ui-forge.mjs` at project root | Runtime-resolving wrapper; safe to commit; required for `node ui-forge.mjs` invocations |
+
+**Optional — Claude Exclusives**
+
+| Feature | Installed file(s) | Slash command |
+|---------|------------------|---------------|
+| **Export Design** | `scripts/export-design.js` — exports `design-arch.json` → `design/claude-design-bundle/` | `/forge-export-design` |
+| **Fetch Handoff** | `scripts/fetch-handoff.js` — fetches a Claude Design handoff URL → local refs | `/forge-handoff` |
 
 ### Signal-Based Generation
 
@@ -271,7 +361,7 @@ Themes are **gap-fill only** — scan findings always win. A theme fills `compon
 - Copies general built-in standard (`nextjs-image.md`) to `design/standards/` and auto-registers it. `sample-standard.md` is a template for users to copy, not an active standard — it remains in `references/standards/` as documentation only.
 - Handles `.forgeignore` with three-way logic: creates from StackShift template if missing, overwrites if it's a UI Forge template, or appends StackShift exclusions to an existing custom file.
 - Preserves the `_paired` mirror block in `design-arch.json` on re-scan so StackShift paired-mode markers are never lost.
-- **Supports `--theme-override`**: bootstrap a project's `globals.css` and `tailwind.config.*` with default StackShift CSS variable tokens, Inter font import, and full `theme.extend` block before scanning. The scan then picks up the overridden files naturally.
+- **Theme override**: bootstraps `globals.css` and `tailwind.config.*` with StackShift CSS variable tokens, Inter font import, and a full `theme.extend` block before scanning — the scan then picks up the overridden files naturally. The `init` installer prompts for this interactively when StackShift is selected. For manual re-runs after install:
 
 ```bash
 # Bootstrap globals.css + tailwind.config.ts with StackShift defaults, then scan
@@ -420,6 +510,13 @@ Full release notes are in [`change-logs/`](./change-logs/).
 
 | Version | Date | Notes |
 |---------|------|-------|
+| [1.6.7](./change-logs/1-6-7-mcp-stale-path-fix.md) | 2026-05-22 | MCP stale path fix. When `ui-forge init` was previously run from a temp directory, the MCP server path written into `~/.claude.json` and Cline's `cline_mcp_settings.json` pointed into that temp dir — producing a permanently broken `✘ failed` MCP entry once the temp dir was cleaned up. The installer now resolves `skillDir` and `os.tmpdir()` before calling `writeMcp`, and skips MCP wiring with a warning when `skillDir` falls inside the system temp directory. No lockfile schema changes; no runtime script changes. |
+| [1.6.6](./change-logs/1-6-6-orphan-cleanup.md) | 2026-05-22 | Disk-state cleanup pass — fixes a structural gap in 1.6.5 where theme, feature, and paired-mode prune routines were guarded by lockfile-vs-lockfile diff (`prior.X !== selections.X`) and therefore stopped firing once the lockfile had already been updated past the diff window. Pre-1.6.6 installs that ended up with `theme: "none"` while stale `_theme: stackshift` markers, `design/standards/stackshift-ui/`, deselected-feature command files, or the old StackShift `.forgeignore` template remained on disk could not be cleaned up by re-running `init`. **(1)** new `pruneOrphanedCommands` scans every selected platform's commands dir each install and removes provenance-owned `forge-*.md` whose feature isn't in the current selection (irrespective of `priorFeatures`). **(2)** `pruneThemeStandards` now iterates every value in `STANDARDS_BY_THEME` and prunes any subdir whose theme key doesn't match the current selection (irrespective of `prior.theme`); deleted paths go to `lockfile.pruned[]` only (no longer phantom-added to `files.design-standards`). **(3)** `design-arch.json` reset now also cleans `isStackShift`, stale `designStandards.<theme-key>` entries, and `patterns` (spacing/typography/conventions are tied to the prior theme's primitives so they're dropped on theme change — next scan repopulates) in addition to `_theme` and `tailwind.darkColorTokens` — all driven by on-disk comparison, not lockfile diff. Empty theme-standards subdirs (e.g. `design/standards/stackshift-ui/`) are now removed after their contents are pruned. **(4)** `.forgeignore` legacy detection: the bundled StackShift template now carries a `# ui-forge:stackshift-baseline` sentinel; `isUiForgeOwned()` recognizes the sentinel AND the legacy `#StackShift Workflow Skill` first line so pre-1.6.6 stackshift forgeignores still get replaced on theme switch-out. 93 tests passing. |
+| [1.6.5](./change-logs/1-6-5-reinstall-cleanup.md) | 2026-05-22 | Reinstall cleanup. Deselecting a feature now removes its command files (previously only script files were pruned). Deselecting a platform removes all its skill files, commands, permissions, and hooks. Theme change: `.forgeignore` is force-replaced, theme-specific design standards are pruned, and `design-arch.json _theme` is reset immediately. Paired mode un-pair now correctly replaces the `.forgeignore`. MCP: creates `cline_mcp_settings.json` when missing instead of silently skipping Cline. Scan prompt now always shown when theme is "None". `doctor --fix` calls full repair (previously only ran the legacy sweep). `ui-forge update` deprecated — prints a warning and delegates to `repair`; removed from `--help`. |
+| [1.6.4](./change-logs/1-6-4-cli-post-install-fixes.md) | 2026-05-22 | Post-install correctness pass on top of 1.6.3. **`skill.version` no longer copied into the installed skill dir** — version is stamped directly into `mcp-server.js` at install time via a new transform in `theme.ts`. New `ui-forge version` command prints the bundled version and source location. Optional-features prompt: **Automation** group now precedes **Claude Exclusives**. Quick scan now forwards `--theme <name>` to `scan.js` so StackShift installs actually seed `usedComponents`, `usedLibraries`, and the `stackshift-ui` standards directory. New `--theme-override` / `--no-backup` flags (and an interactive prompt for stackshift) to opt into destructive `globals.css` + `tailwind.config.*` rewrites; never triggered silently under `--yes`. `design/standards/` bootstrap now writes `_template-standard.md` (underscore prefix matches `scan.js`'s auto-registration filter) and also seeds `nextjs-image.md` (previously unreachable after standards moved out of the skill copy). StackShift `.forgeignore` is written without a provenance header — it's curated content, user-owned immediately. New `feature-prune.ts` removes tracked files when an optional feature is deselected on reinstall (required features never pruned; shared files preserved; `ui-forge.mjs` removed when `project-cli` is dropped). Paired-mode hook leak fixed: re-running `init` after deleting `.stackshift/` now strips the stale `ui-forge:stackshift-validate` entry. `writeHooks` is idempotent — no rewrite when settings.json is byte-identical. Dead `writeForgeignoreCompat` removed. Compact `ls` display for multi-platform installs. 5 stale tests fixed for 1.6.3 realities; 1 new test added; 84 total passing. |
+| [1.6.3](./change-logs/1-6-3-features-prompt-lockfile-polish.md) | 2026-05-22 | Polish pass on the 1.6.2 UX overhaul. Required features (Scan, Forge, Verify, **MCP Server**) are now shown as a locked `p.note` instead of checkboxes — no more accidental deselection. Optional features use `groupMultiselect` with non-selectable group headers: **Claude Exclusives** (Export Design, Fetch Handoff) and **Automation** (Verify After Edit Hook, Project CLI Shim). Theme option labels are now Title Case (Shadcn, Mantine, Plain Tailwind, StackShift). Pairing question moved before Agentic Platforms. Scan now auto-runs when any theme is selected; prompts only when Theme = None (and a tailwind config is present). Lockfile cleaned: `summary` block removed (was duplicating root-level fields), `writtenByFeature` renamed `files`, `hooks`/`projectCli`/`themeLimited`/`forgeignoreSource` removed (derived from `features`+`paired`), duplicate `patched` entries merged, `pruned: []` omitted when empty, `_fileCount` added. `ui-forge.mjs --help` banner is now Title Case. |
+| [1.6.2](./change-logs/1-6-2-ux-overhaul-and-polish.md) | 2026-05-22 | UX overhaul (Phase B) and polish (Phase C) from the 1.6.x fix plan. New prompt order (Features → Theme → Scan → Platforms → Scope). `mcp-server`, `post-tool-verify-hook`, and `project-cli` are now **Feature toggles** — the three separate confirm sub-prompts are removed. "No Theme" option added. Quick-scan prompt at end of install (`--quick-scan=on\|off` for CI). `--scope=both` removed (use `project` or `global`). "Target Platforms" renamed "Agentic Platforms". Title Case all prompt messages. Lockfile v2: flat `written[]` replaced by `writtenByFeature{}` + `summary` block; v1 lockfiles auto-migrated. `design/standards/` seeded from theme sources at install time (stackshift-ui standards bridge). `references/standards/` no longer copied into skill dir. `ui-forge.mjs` rewritten with `--help`, `--version`, proper exit codes. |
+| [1.6.1](./change-logs/1-6-1-installer-fixes.md) | 2026-05-22 | Installer critical fixes uncovered during 1.6.0 dogfooding. **(1)** `PostToolUse` hook shape rewritten to Claude Code's actual schema (`{matcher: "Edit\|Write", hooks: [{type: "command", command: "..."}]}`); the 1.6.0 shape with object-typed `matcher` and top-level `id` was silently rejected. Legacy entries are migrated in place on re-install via a sibling `_uiForgeId` marker. Hook command env var corrected from `$CLAUDE_FILE_PATH` (never exported) to `$CLAUDE_TOOL_INPUT_file_path` (canonical) — so `verify.js` actually receives the edited file path. **(2)** Permission entries are now emitted in both quoted and unquoted variants when the install path contains whitespace, so `/forge-scan` no longer fails permission checks on paths like `C:/Users/Garry Caber/...` where the slash command body quotes the path but the wired permission was bare. **(3)** MCP client configs (Claude Code, Cursor, Codex TOML, Cline) now use `process.execPath` (absolute node binary path) instead of bare `"node"` — Cline on Windows launches MCP servers without inheriting a shell PATH, so the bare form failed to resolve. **(4)** `.forgeignore` re-installs now correctly replace the template when switching themes: every generated file carries a `# Generated by ui-forge@<version>` provenance header; files with the header are safe to replace, files without it are user-owned and preserved. New `--force-forgeignore` flag clobbers user-owned files explicitly. No lockfile schema break; no runtime script changes; pure wiring patches. 24 new integration tests (83 total). |
 | [1.6.0](./change-logs/1-6-0-cli-installer.md) | 2026-05-21 | First-party install CLI (`pnpm dlx ui-forge init` / `npx ui-forge init`): replaces `scripts/cli.js install` and the legacy `npx skills add` install path. pnpm monorepo with new TypeScript installer in `cli/` (runtime stays stdlib-only JS). Interactive flow via `@clack/prompts` with full non-interactive (`--yes`) and CI-friendly flag equivalents. New commands: `init`, `repair`, `update`, `doctor` (with `--fix` and read-only sweep), `uninstall`, `migrate` (one-shot migration from pre-1.6.0 layout), `ls`, `mcp-config`. Typed asset manifest copies only the runtime files each selected feature needs; never copies dev assets (`cli/src/`, `tests/`, `change-logs/`, `CLAUDE.md`, `examples/`) into target skill dirs. Selective per-feature wiring of slash commands + scoped permissions (one entry per script, POSIX paths) + MCP servers (Claude Code, Cursor, Codex, Cline across Windows/macOS/Linux). Portable runtime-resolving `./ui-forge.mjs` shim at project root (safe to commit). StackShift pairing auto-detected via `.stackshift/installed.json`; stackshift theme runs in limited mode (`themeOverride` stripped, `_limited: true`) when unpaired. Provenance header (`# Generated by ui-forge@<version>`) templated per write so `update` produces clean diffs. Lockfile (`.ui-forge/installed.json`) tracks `written[]`, `patched[]`, and `pruned[]` for exact uninstall and audit. Legacy sweep removes pre-1.6.0 artifacts (`scripts/cli.js`, `examples/`, `tests/`, `change-logs/`, `CLAUDE.md`, deselected theme JSONs) from target dirs on init/doctor. Atomic writes with `.bak` backups on every patched JSON/TOML. Idempotent — re-running `init` with the same selections produces zero diff. Deprecation banner on `scripts/cli.js install` (will be removed in 1.7.0). 59 integration tests covering install, dry-run, idempotency, repair, sweep, doctor, ls, uninstall, stackshift limited-mode, and migrate. |
 | [1.5.0](./change-logs/1-5-0-ai-agnostic-synthesis.md) | 2026-05-21 | AI-agnostic scan synthesis: `/forge-scan` is now a two-phase process. Phase 1 is pure static analysis (always runs, writes `design-arch.json`). Phase 2 delegates synthesis to the **session AI** — whichever model is active (Claude, GPT-4o, Gemini, Codex, etc.) — via `design/.synthesis-request.json`. New `scripts/apply-synthesis.js` validates and patches the arch file. Removed subprocess `claude` CLI invocation from `scan.js` entirely. Works in Claude Code, Cline, Cursor, Codex CLI, and any agentic environment. `--quick` skips Phase 2. 54 new assertions; 209 total. |
 | [1.4.0](./change-logs/1-4-0-paired-mode-body-rules.md) | 2026-05-21 | StackShift paired-mode body rules: new `SIGNAL_STACKSHIFT_UI` prompt-pattern addendum (auto-injected under marker file OR `arch.isStackShift`), new `09-anti-patterns.md` consolidated standard, unified paired-mode detection (`pairedLike`) across `invoke.js` / `verify.js` / `validate-contract.js`, paired-mode body-rule checks in the shared validator (`packages/variant-contract/validate.js` — raw HTML primitives, `!important` in `className`, `import React`, `import * as @stackshift-ui/...` as violations; `?? "fallback"`, inline `style`, direct `next/image`/`next/link`, `@stackshift-ui/system` as warnings; comment/string-literal stripping to prevent false positives), `verify.js` switched to static import (Windows ESM URL bug fix), `validate-contract.js` simplified to delegate to shared validator, `scan.js` `copyBuiltinStandardDir` now file-level idempotent so new upstream standards propagate to existing `--theme stackshift` projects on rescan, `themes/stackshift.json` `colorTokens` aligned with `themeOverride`. 49 new assertions; 155 total across all test files. |

@@ -7,6 +7,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { sweep } from './legacy-sweep.js';
 import { loadLockfile } from './lockfile.js';
+import { runRepair } from './repair.js';
 import { platformById, platformPaths } from './platforms.js';
 import { getSkillVersion } from './registry.js';
 import { expandScope } from './wiring/commands.js';
@@ -76,27 +77,22 @@ export async function runDoctor(cwd, flags) {
     else {
         checks.push({ name: 'paired flag matches .stackshift', ok: true });
     }
-    // 6. Legacy sweep.
+    // 6. Legacy sweep (read-only — always 'report' mode; --fix triggers repair below).
     for (const id of lock.platforms) {
         const platform = platformById(id);
         if (!platform)
             continue;
         for (const scope of expandScope(lock.scope)) {
             const paths = platformPaths(cwd, platform, scope, home);
-            const report = sweep({
+            const sweepResult = sweep({
                 skillDir: paths.skillDir,
                 features: lock.features,
                 theme: lock.theme,
                 paired: lock.paired,
-                mode: fix ? 'delete' : 'report',
+                mode: 'report',
             });
-            if (fix) {
-                if (report.deleted.length > 0) {
-                    console.log(`Pruned ${report.deleted.length} legacy file(s) from ${id} (${scope}).`);
-                }
-            }
-            else if (report.kept.some((k) => k.reason.startsWith('would-delete'))) {
-                const cnt = report.kept.filter((k) => k.reason.startsWith('would-delete')).length;
+            if (sweepResult.kept.some((k) => k.reason.startsWith('would-delete'))) {
+                const cnt = sweepResult.kept.filter((k) => k.reason.startsWith('would-delete')).length;
                 checks.push({
                     name: `${id} (${scope}): legacy sweep`,
                     ok: false,
@@ -109,6 +105,11 @@ export async function runDoctor(cwd, flags) {
         }
     }
     report(checks);
+    if (fix) {
+        console.log('\nRunning repair…');
+        await runRepair(cwd, flags);
+        return;
+    }
     if (!checks.every((c) => c.ok))
         process.exit(1);
 }

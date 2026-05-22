@@ -4,9 +4,10 @@
  */
 import type { FeatureId, ThemeId } from './assets.js';
 
-export type Scope = 'project' | 'global' | 'both';
+export type Scope = 'project' | 'global';
 export type PairMode = 'auto' | 'on' | 'off';
 export type OnOff = 'on' | 'off';
+export type QuickScan = 'on' | 'off' | 'auto';
 
 export interface ParsedFlags {
   command: string;
@@ -20,10 +21,16 @@ export interface ParsedFlags {
   mcpClients?: string[];
   hooks?: OnOff;
   projectCli?: OnOff;
+  quickScan?: QuickScan;
   pruneUnknown: boolean;
   dryRun: boolean;
   force: boolean;
+  forceForgeignore: boolean;
   detectPairing: boolean;
+  /** Apply destructive StackShift theme overrides (globals.css, tailwind.config). */
+  themeOverride: boolean;
+  /** When themeOverride is on, skip .bak backup creation. */
+  noBackup: boolean;
   help: boolean;
   positional: string[];
   raw: Record<string, string | boolean>;
@@ -40,7 +47,10 @@ const BOOLEAN_FLAGS = new Set([
   'dry-run',
   'prune-unknown',
   'force',
+  'force-forgeignore',
   'detect-pairing',
+  'theme-override',
+  'no-backup',
 ]);
 
 function readArg(arg: string, next: string | undefined): { key: string; value: string | boolean; consumed: boolean } {
@@ -97,13 +107,24 @@ export function parseFlags(argv: string[]): ParsedFlags {
 
   const scope = (() => {
     const v = raw['scope'];
-    if (v === 'project' || v === 'global' || v === 'both') return v;
+    if (v === 'project' || v === 'global') return v as Scope;
+    if (v === 'both') {
+      console.error("Unknown scope 'both' — use 'project' or 'global'.");
+      process.exit(2);
+    }
     return undefined;
   })();
 
   const theme = (() => {
     const v = raw['theme'];
-    if (v === 'shadcn' || v === 'mantine' || v === 'plain-tailwind' || v === 'stackshift') return v;
+    if (v === 'shadcn' || v === 'mantine' || v === 'plain-tailwind' || v === 'stackshift' || v === 'none') return v as ThemeId;
+    return undefined;
+  })();
+
+  const quickScan = (() => {
+    const v = raw['quick-scan'];
+    if (v === 'on' || v === 'off' || v === 'auto') return v as QuickScan;
+    if (v === true) return 'on' as QuickScan;
     return undefined;
   })();
 
@@ -119,10 +140,14 @@ export function parseFlags(argv: string[]): ParsedFlags {
     mcpClients: csv(raw['mcp-clients']),
     hooks: onoff(raw['hooks']),
     projectCli: onoff(raw['project-cli']),
+    quickScan,
     pruneUnknown: raw['prune-unknown'] === true,
     dryRun: raw['dry-run'] === true,
     force: raw['force'] === true,
+    forceForgeignore: raw['force-forgeignore'] === true,
     detectPairing: raw['detect-pairing'] === true,
+    themeOverride: raw['theme-override'] === true,
+    noBackup: raw['no-backup'] === true,
     help: raw['help'] === true,
     positional,
     raw,
@@ -139,33 +164,38 @@ Usage:
 Commands:
   init        Install or modify UI Forge wiring (interactive by default)
   repair      Re-apply wiring from .ui-forge/installed.json
-  update      Sync wiring to the current skill.version
-  doctor      Diagnose the install; --fix to clean up legacy/stale wiring
+  doctor      Diagnose the install; use --fix to run a full repair after diagnosis
   uninstall   Remove everything UI Forge wrote
   migrate     Migrate from a pre-1.6.0 install
   mcp-config  Print the MCP server snippet for manual wiring
   ls          Summarize the current install
+  version     Print the bundled skill version + source location
   help        Show this help
 
 Common options:
-  -y, --yes              Accept defaults non-interactively
-  --scope <s>            project | global | both
-  --platforms <csv>      claude,cursor,agents,codex,copilot,gemini
-  --features <csv>       scan,forge,verify,export-design,fetch-handoff,mcp-server
-  --theme <t>            shadcn | mantine | plain-tailwind | stackshift
-  --pair <m>             auto | on | off
-  --mcp <on|off>         Enable/disable MCP wiring
-  --mcp-clients <csv>    Subset of detected clients to wire
-  --hooks <on|off>       PostToolUse verify hook
-  --project-cli <on|off> Create ./ui-forge.mjs shim at project root
-  --prune-unknown        Auto-delete unknown files during legacy sweep
-  --dry-run              Print plan; write nothing
-  --force                (update) overwrite user-modified files
-  -h, --help             Show this help
+  -y, --yes                Accept defaults non-interactively
+  --scope <s>              project | global
+  --platforms <csv>        claude,cursor,agents,codex,copilot,gemini
+  --features <csv>         scan,forge,verify,export-design,fetch-handoff,
+                           mcp-server,post-tool-verify-hook,project-cli
+  --theme <t>              shadcn | mantine | plain-tailwind | stackshift | none
+  --pair <m>               auto | on | off
+  --mcp <on|off>           Enable/disable MCP wiring
+  --mcp-clients <csv>      Subset of detected clients to wire
+  --hooks <on|off>         PostToolUse verify hook (prefer feature 'post-tool-verify-hook')
+  --project-cli <on|off>   Create ./ui-forge.mjs shim (prefer feature 'project-cli')
+  --quick-scan <on|off>    Run scan after install (default: prompt interactively)
+  --theme-override         (stackshift only) destructive rewrite of globals.css + tailwind.config
+  --no-backup              Skip .bak creation when --theme-override runs
+  --prune-unknown          Auto-delete unknown files during legacy sweep
+  --dry-run                Print plan; write nothing
+  --force                  (update) overwrite user-modified files
+  --force-forgeignore      Overwrite a user-owned .forgeignore on re-install
+  -h, --help               Show this help
 
 Examples:
   ui-forge init
-  ui-forge init --yes --features=scan,forge,verify --theme=shadcn
+  ui-forge init --yes --features=scan,forge,verify,mcp-server --theme=shadcn
   ui-forge doctor --fix
   ui-forge uninstall
 `);

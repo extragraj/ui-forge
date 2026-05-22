@@ -21,7 +21,7 @@ function templateBody(source: string, skillRoot: string, version: string): strin
 export interface WriteCommandsArgs {
   cwd: string;
   homedir: string;
-  scope: 'project' | 'global' | 'both';
+  scope: 'project' | 'global';
   platformIds: string[];
   features: FeatureId[];
   sourceRoot: string;
@@ -66,10 +66,10 @@ export function writeCommands(args: WriteCommandsArgs): WriteCommandsResult {
 }
 
 /**
- * Iterate the scope expansions for "both".
+ * Normalize scope to an array. Kept as a function for call-site symmetry;
+ * 'both' is no longer a valid value (removed in 1.6.2).
  */
-export function expandScope(scope: 'project' | 'global' | 'both'): Array<'project' | 'global'> {
-  if (scope === 'both') return ['project', 'global'];
+export function expandScope(scope: 'project' | 'global'): Array<'project' | 'global'> {
   return [scope];
 }
 

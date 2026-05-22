@@ -2,15 +2,37 @@
  * Runtime asset manifest — defines exactly what files each selected feature
  * needs in the target skill dir. Driven by §3.2 of the install plan.
  */
-export const REQUIRED_FEATURES = ['scan', 'forge'];
+export const REQUIRED_FEATURES = ['scan', 'forge', 'verify', 'mcp-server'];
+/** Human-readable display name for each feature (used in summaries). */
+export const FEATURE_DISPLAY = {
+    scan: 'Scan',
+    forge: 'Forge',
+    verify: 'Verify',
+    'export-design': 'Export Design',
+    'fetch-handoff': 'Fetch Handoff',
+    'mcp-server': 'MCP Server',
+    'post-tool-verify-hook': 'Verify After Edit (Hook)',
+    'project-cli': 'Project CLI Shim',
+};
+/**
+ * Standards source dirs to bridge into design/standards/ per theme.
+ * Key: theme ID. Value: subdirectory under references/standards/ to copy.
+ */
+export const STANDARDS_BY_THEME = {
+    stackshift: 'stackshift-ui',
+};
 export const RUNTIME_ASSETS = {
     always: [
         'scripts/detect.js',
         'scripts/detect.sh',
         'scripts/apply-synthesis.js',
         'references/prompt-patterns.md',
-        'references/standards/',
-        'skill.version',
+        // NOTE: references/standards/ is NOT copied into the skill dir (Issue 10).
+        // Standards live in design/standards/ (seeded by bootstrapDesignStandards at install time).
+        // NOTE: skill.version is NOT copied (1.6.4) — it's source-bundle metadata,
+        // not runtime data. The installed lockfile records the version under
+        // `skillVersion` and the version is stamped into mcp-server.js + the
+        // project-cli shim at install time via the asset transform.
         'SKILL.md',
     ],
     byFeature: {
@@ -25,6 +47,8 @@ export const RUNTIME_ASSETS = {
         'export-design': ['scripts/export-design.js'],
         'fetch-handoff': ['scripts/fetch-handoff.js'],
         'mcp-server': ['scripts/mcp-server.js'],
+        'post-tool-verify-hook': [], // wiring only; no script assets
+        'project-cli': [], // wiring only; no script assets
     },
     byTheme: {
         shadcn: { files: ['themes/shadcn.json'] },
@@ -34,6 +58,7 @@ export const RUNTIME_ASSETS = {
             files: ['themes/stackshift.json'],
             forgeignore: 'references/default-stackshift-forgeignore.txt',
         },
+        none: { files: [] },
     },
     defaultForgeignore: 'references/default-forgeignore.txt',
 };
@@ -80,6 +105,7 @@ export const FEATURE_PERMISSIONS = {
     'export-design': ['scripts/export-design.js'],
     'fetch-handoff': ['scripts/fetch-handoff.js'],
     'mcp-server': ['scripts/mcp-server.js'],
+    'post-tool-verify-hook': ['scripts/verify.js'], // hook invokes verify.js
 };
 /**
  * Resolve the full set of assets to copy for a given selection.

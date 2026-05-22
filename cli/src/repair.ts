@@ -2,8 +2,9 @@
  * `repair` — re-apply wiring from the existing lockfile non-interactively.
  */
 import type { ParsedFlags } from './flags.js';
-import { loadLockfile } from './lockfile.js';
+import { loadLockfile, isHookEnabled, isProjectCli } from './lockfile.js';
 import { runInit } from './install.js';
+import { getSkillVersion } from './registry.js';
 
 export async function runRepair(cwd: string, flags: ParsedFlags): Promise<void> {
   const lock = loadLockfile(cwd);
@@ -12,7 +13,15 @@ export async function runRepair(cwd: string, flags: ParsedFlags): Promise<void> 
     process.exit(1);
   }
 
+  const current = getSkillVersion();
+  if (lock.skillVersion !== current) {
+    console.log(`Updating from v${lock.skillVersion} → v${current}…`);
+  }
+
   // Synthesize flags from the lockfile so install runs non-interactively.
+  // Features now include 'post-tool-verify-hook' and 'project-cli', so the
+  // separate --hooks and --project-cli flags are only needed for pre-1.6.2
+  // lockfiles that don't have these in features[].
   const forced: ParsedFlags = {
     ...flags,
     yes: true,
@@ -22,9 +31,10 @@ export async function runRepair(cwd: string, flags: ParsedFlags): Promise<void> 
     theme: lock.theme,
     mcp: lock.mcpClients.length > 0 ? 'on' : 'off',
     mcpClients: lock.mcpClients,
-    hooks: lock.hooks.postToolUseVerify ? 'on' : 'off',
-    projectCli: lock.projectCli ? 'on' : 'off',
+    hooks: isHookEnabled(lock) ? 'on' : 'off',
+    projectCli: isProjectCli(lock) ? 'on' : 'off',
     pair: lock.paired ? 'on' : flags.detectPairing ? 'auto' : 'off',
+    quickScan: 'off', // don't re-run scan on repair
   };
 
   await runInit(cwd, forced);

@@ -1,6 +1,6 @@
 ---
 name: ui-forge
-version: 1.6.0
+version: 1.6.7
 description: 'Production Next.js component generator. Converts HTML, TSX, images, and JSON into project-compliant components using your design system. Triggers on component creation, HTML/TSX conversion, page generation, image-to-component tasks, or any frontend code generation request. Requires a one-time scan to build design/design-arch.json.'
 ---
 
@@ -50,7 +50,7 @@ Works in Claude Code, Cursor, Codex, and other agentic platforms that support sl
 Install via the UI Forge CLI from your project root — wires slash commands, scoped Bash permissions, optional MCP, and a project-root `./ui-forge.mjs` shim in one pass:
 
 ```bash
-npx ui-forge init    # or: pnpm dlx ui-forge init
+npx @extragraj/ui-forge init    # or: pnpm dlx @extragraj/ui-forge init
 ```
 
 Re-run `ui-forge init` later to add or remove features; `ui-forge repair`, `update`, `doctor`, `uninstall` are also available.
@@ -173,9 +173,9 @@ node ui-forge.mjs handoff <url>
 If the package is installed via npm, the `ui-forge` bin is available globally:
 
 ```bash
-npx ui-forge init       # one-time install
-npx ui-forge ls         # summarize the install
-npx ui-forge doctor     # diagnose
+npx @extragraj/ui-forge init       # one-time install
+npx @extragraj/ui-forge ls         # summarize the install
+npx @extragraj/ui-forge doctor     # diagnose
 ```
 
 **Without the shim:** If `./ui-forge.mjs` is missing, use `scripts/detect.js` to locate the skill:

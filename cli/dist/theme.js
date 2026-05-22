@@ -5,6 +5,34 @@
  * undefined to use default copy.
  */
 export function maybeTransformAsset(ctx, relPath, contents) {
+    // Version-stamp scripts that previously read skill.version at runtime.
+    if (ctx.version && relPath === 'scripts/mcp-server.js') {
+        const body = contents.toString('utf8');
+        // Match the full getVersion() block with brace counting. The source is:
+        //   function getVersion() { try { ... } catch { ... } }
+        // which has three nested closing braces, so a flat `[^}]*\}` would leave
+        // orphan tokens behind.
+        const start = body.indexOf('function getVersion()');
+        if (start !== -1) {
+            const openBrace = body.indexOf('{', start);
+            if (openBrace !== -1) {
+                let depth = 1;
+                let i = openBrace + 1;
+                while (i < body.length && depth > 0) {
+                    if (body[i] === '{')
+                        depth++;
+                    else if (body[i] === '}')
+                        depth--;
+                    i++;
+                }
+                if (depth === 0) {
+                    const before = body.slice(0, start);
+                    const after = body.slice(i);
+                    return before + `function getVersion() { return ${JSON.stringify(ctx.version)} }` + after;
+                }
+            }
+        }
+    }
     if (ctx.theme !== 'stackshift')
         return undefined;
     if (relPath !== 'themes/stackshift.json')
