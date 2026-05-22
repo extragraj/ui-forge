@@ -83,6 +83,9 @@ export const NEVER_COPY = [
     /scripts\/sync-version\.mjs$/,
     /scripts\/test-mcp\.mjs$/,
     /scripts\/cli\.js$/,
+    /^references\/(?!prompt-patterns\.md$).+/,
+    /^themes\/README\.md$/,
+    /^design\//,
 ];
 /**
  * Slash command files written per feature.

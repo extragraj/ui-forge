@@ -36,7 +36,10 @@ const STACKSHIFT_MARKER = join(PROJECT_ROOT, '.stackshift', 'installed.json')
 
 const args = process.argv.slice(2)
 const positional = args.filter(a => !a.startsWith('--'))
-const outputArg = positional[0]
+// On Windows, PowerShell expands "$CLAUDE_TOOL_INPUT_file_path" in the hook command
+// to an empty string (PS variables use $env:VAR syntax). Fall back to the env var
+// directly so the hook works cross-platform.
+const outputArg = positional[0] || process.env['CLAUDE_TOOL_INPUT_file_path']
 let contractArg = positional[1]
 const playwrightIdx = args.indexOf('--playwright')
 const playwrightUrl = playwrightIdx !== -1 && args[playwrightIdx + 1] && !args[playwrightIdx + 1].startsWith('--')

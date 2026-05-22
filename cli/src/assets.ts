@@ -108,6 +108,9 @@ export const NEVER_COPY: RegExp[] = [
   /scripts\/sync-version\.mjs$/,
   /scripts\/test-mcp\.mjs$/,
   /scripts\/cli\.js$/,
+  /^references\/(?!prompt-patterns\.md$).+/,
+  /^themes\/README\.md$/,
+  /^design\//,
 ];
 
 /**

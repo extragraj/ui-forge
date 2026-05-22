@@ -354,9 +354,13 @@ function loadDesignStandards(arch, opts = {}) {
     }
   }
 
-  // Step 3 — built-in fallback: scan references/standards/ for .md files and directories
+  // Step 3 — built-in fallback: scan references/standards/ for .md files and directories.
+  // references/standards/ is not copied to installed skill dirs (NEVER_COPY in assets.ts);
+  // built-in content is seeded to design/standards/ by bootstrapDesignStandards at install
+  // time and loaded by Step 2 above. This step only fires in dev-tree runs where the source
+  // directory exists. Guard prevents a crash on every installed invocation.
   const useBuiltins = opts.useBuiltins !== false && archStandards._useBuiltins !== false
-  if (useBuiltins) {
+  if (useBuiltins && existsSync(BUILTIN_STANDARDS_DIR)) {
     for (const entry of readdirSync(BUILTIN_STANDARDS_DIR).sort()) {
       const entryPath = join(BUILTIN_STANDARDS_DIR, entry)
       const st = statSync(entryPath)
