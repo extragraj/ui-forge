@@ -9,7 +9,7 @@
 # HOW TO USE
 # ------------------------------------------------------------------------------
 #   1. Copy this file to the project root:
-#        cp .claude/skills/ui-forge/references/default-forgeignore.txt .forgeignore
+#        cp .claude/skills/ui-forge/references/forgeignore/default.txt .forgeignore
 #   2. Uncomment lines below that apply to your project, or add your own.
 #   3. Re-run: node .claude/skills/ui-forge/scripts/scan.js
 #

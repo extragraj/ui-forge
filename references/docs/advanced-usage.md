@@ -349,12 +349,12 @@ Opt out with `--no-default-ignore`.
 ### `.forgeignore`
 
 Skill-owned ignore file, lives at project root. Same syntax as above.
-A copy-paste template ships at `references/default-forgeignore.txt` — it is
+A copy-paste template ships at `references/forgeignore/default.txt` — it is
 intentionally empty so UI Forge never silently excludes project files.
 
 ```bash
 # Seed the template into your project and edit
-cp .claude/skills/ui-forge/references/default-forgeignore.txt .forgeignore
+cp .claude/skills/ui-forge/references/forgeignore/default.txt .forgeignore
 ```
 
 ### Ad-hoc extra files
@@ -458,7 +458,7 @@ To ship opinionated defaults from this skill, edit the template in place and
 make sure it contains at least one prose line outside comments. Keep each
 under ~3,000 characters — the injector truncates past that and warns.
 
-See `references/standards/README.md` for the full table.
+See `references/standards/index.md` for the full table.
 
 ## StackShift paired mode (1.4.0+)
 

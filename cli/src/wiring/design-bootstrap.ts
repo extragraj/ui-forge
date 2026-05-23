@@ -1,12 +1,16 @@
 /**
  * Bootstrap design/standards/ in the target project from the skill's
- * references/standards/ source (Issue 9 — theme standards bridging).
+ * built-in standards sources (Issue 9 — theme standards bridging).
+ *
+ * Sources:
+ *  - General standards: references/standards/*.md
+ *  - Theme-specific standards: references/themes/<theme>/standards/*.md
+ *    (configured per theme in STANDARDS_BY_THEME)
  *
  * Rules:
  *  - Files with a provenance header are safe to overwrite on re-install.
  *  - Files without the header are user-owned and never touched.
  *  - Always seeds the sample standard template as a starter.
- *  - For stackshift theme: copies the stackshift-ui/ subdir.
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
@@ -104,19 +108,20 @@ export function bootstrapDesignStandards(args: BootstrapArgs): BootstrapResult {
   });
 
   // Theme-specific standards
-  const subdir = STANDARDS_BY_THEME[theme];
-  if (subdir) {
-    const srcSubdir = join(sourceRoot, 'references', 'standards', subdir);
+  const themeStandards = STANDARDS_BY_THEME[theme];
+  if (themeStandards) {
+    const { sourcePath, destSubdir } = themeStandards;
+    const srcSubdir = join(sourceRoot, ...sourcePath.split('/'));
     if (existsSync(srcSubdir)) {
-      const destSubdir = join(destDir, subdir);
-      if (!dryRun) ensureDir(destSubdir);
+      const destAbs = join(destDir, destSubdir);
+      if (!dryRun) ensureDir(destAbs);
       const files = readdirSync(srcSubdir).filter((f) => f.endsWith('.md'));
       for (const file of files) {
         copyWithProvenance({
           srcAbs: join(srcSubdir, file),
-          destAbs: join(destSubdir, file),
+          destAbs: join(destAbs, file),
           version,
-          sourceRel: `references/standards/${subdir}/${file}`,
+          sourceRel: `${sourcePath}/${file}`,
           dryRun,
           copied,
           cwd,
@@ -153,9 +158,10 @@ export function pruneThemeStandards(args: {
 
   const removed: string[] = [];
 
-  for (const [themeKey, subdir] of Object.entries(STANDARDS_BY_THEME)) {
-    if (!subdir || subdir === keepSubdir) continue;
-    const targetDir = join(standardsRoot, subdir);
+  const keepDestSubdir = keepSubdir?.destSubdir;
+  for (const [themeKey, cfg] of Object.entries(STANDARDS_BY_THEME)) {
+    if (!cfg || cfg.destSubdir === keepDestSubdir) continue;
+    const targetDir = join(standardsRoot, cfg.destSubdir);
     if (!existsSync(targetDir)) continue;
 
     let files: string[] = [];

@@ -1,0 +1,89 @@
+=== UI FORGE — PAGE DECOMPOSITION (Stage 1) ===
+
+TASK
+Convert landing page; decompose into sections
+
+DESIGN AUTHORITY: design/design-arch.json (for existingProjectSection detection)
+  componentLib: shadcn/ui
+  tokens: primary, muted, slate-50..950, blue-600/700, white
+  spacing: Page sections py-20 with gap-16 between; container max-w-7xl mx-auto px-6
+  typography: Inter sans
+
+PAGE CONTENT
+<!-- Example: CONVERT_PAGE (multi-section HTML → page decomposition) -->
+<!-- Stage 1 invoke:
+  node invoke.js \
+    --task "Convert this landing page into Next.js components" \
+    --refs ./examples/02-marketing-page/input/landing.html \
+    --output ./components/sections/
+-->
+<!-- After Stage 1: review design/forge-page-plan.json, then re-run for Stage 2 -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Acme — Ship faster</title></head>
+<body>
+
+<!-- SECTION: hero (lines 19-35) -->
+<section class="hero" style="padding:80px 40px;text-align:center;background:#0f172a">
+  <h1 style="font-size:3rem;color:#fff;font-weight:800">Ship software faster</h1>
+  <p style="font-size:1.25rem;color:#94a3b8;margin-top:1rem;max-width:560px;margin-inline:auto">
+    Automate your deployment pipeline in minutes. No DevOps PhD required.
+  </p>
+  <div style="margin-top:2rem;display:flex;gap:1rem;justify-content:center">
+    <a href="/signup" style="padding:.875rem 1.75rem;background:#3b82f6;color:#fff;border-radius:8px;font-weight:600;text-decoration:none">Start free trial</a>
+    <a href="/demo" style="padding:.875rem 1.75rem;background:transparent;color:#e2e8f0;border:1px solid #334155;border-radius:8px;font-weight:600;text-decoration:none">Watch demo</a>
+  </div>
+</section>
+
+<!-- SECTION: features (lines 37-65) -->
+<section class="features" style="padding:80px 40px;background:#fff">
+  <h2 style="text-align:center;font-size:2rem;font-weight:700;color:#0f172a">Everything you need</h2>
+  <p style="text-align:center;color:#64748b;margin-top:.5rem">One platform, zero friction.</p>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2rem;margin-top:3rem">
+    <div style="padding:1.5rem;border:1px solid #e2e8f0;border-radius:12px">
+      <h3 style="font-size:1.125rem;font-weight:600;color:#0f172a">Instant deploys</h3>
+      <p style="color:#64748b;margin-top:.5rem;font-size:.9375rem">Push to main and ship. Zero-downtime by default.</p>
+    </div>
+    <div style="padding:1.5rem;border:1px solid #e2e8f0;border-radius:12px">
+      <h3 style="font-size:1.125rem;font-weight:600;color:#0f172a">Auto rollback</h3>
+      <p style="color:#64748b;margin-top:.5rem;font-size:.9375rem">Error rate spikes? We roll back before you notice.</p>
+    </div>
+    <div style="padding:1.5rem;border:1px solid #e2e8f0;border-radius:12px">
+      <h3 style="font-size:1.125rem;font-weight:600;color:#0f172a">Team dashboards</h3>
+      <p style="color:#64748b;margin-top:.5rem;font-size:.9375rem">See every deploy, branch, and incident in one view.</p>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION: callToAction (lines 67-77) -->
+<section class="cta" style="padding:80px 40px;background:#1e3a5f;text-align:center">
+  <h2 style="font-size:2.25rem;font-weight:700;color:#fff">Ready to ship faster?</h2>
+  <p style="color:#93c5fd;margin-top:1rem;font-size:1.125rem">Join 4,000+ engineering teams already on Acme.</p>
+  <a href="/signup" style="display:inline-block;margin-top:2rem;padding:.875rem 2rem;background:#3b82f6;color:#fff;border-radius:8px;font-weight:600;text-decoration:none">Get started free</a>
+</section>
+
+</body>
+</html>
+
+
+INSTRUCTIONS
+Identify all distinct sections in this page.
+Write the following JSON to: design/forge-page-plan.json
+
+{
+  "_ref": "input/landing.html",
+  "_created": "<ISO timestamp>",
+  "sections": [
+    { "name": "camelCaseName", "type": "typeKey", "lines": [startLine, endLine], "existingProjectSection": false }
+  ]
+}
+
+Valid types: hero, features, testimonials, pricing, callToAction, footer, navbar, faq, stats, team, gallery, contact, other
+Set existingProjectSection: true only if highly confident this section already exists in the project.
+Line numbers must refer to the original file — do not adjust for any stripping or preprocessing.
+
+After writing the file, tell the user to:
+  1. Review design/forge-page-plan.json
+  2. Set existingProjectSection: true on sections they already have
+  3. Re-run the same command to generate the sections (Stage 2 runs automatically)

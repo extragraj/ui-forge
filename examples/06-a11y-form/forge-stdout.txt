@@ -1,0 +1,125 @@
+=== UI FORGE ===
+SIGNAL: CONVERT_SECTION +A11Y
+
+TASK
+Convert contact form section; enforce WCAG 2.1 AA
+
+DESIGN AUTHORITY: design/design-arch.json
+  componentLib: shadcn/ui
+  tokens: background, foreground, muted, border, primary, destructive, slate-50..950
+  spacing: Section py-20 px-6; form stack gap-5; field label-input gap-1.5
+  typography: Inter sans. h2 text-3xl bold, label text-sm medium, body text-base, error text-xs
+  usedComponents: Button, Input, Label, Textarea
+  usedLibraries: , 
+  conventions:
+  - Inputs from shadcn/ui (semantic <Input>, <Label>, <Textarea>, <Button> elements)
+  - Every interactive control has a programmatic label (htmlFor + id, not visual proximity)
+  - Errors use aria-describedby; aria-invalid set when validation fails
+  - Submit is a <button type='submit'>, never a styled div
+
+DESIGN STANDARDS (load as needed)
+// [REF] nextjs-image [../../../../../Garry Caber/Desktop/WebriQ/ui-forge/references/standards/nextjs-image.md]: **Scope:** Applies to any Next.js + Sanity + TypeScript project — not StackShift-specific. — READ FULL FILE
+
+REFERENCE [input/contact-form.html — html]
+// EXTRACTED STYLES — for token mapping, do not copy to output
+/* inline styles */
+padding:80px 24px;background:#0F172A;color:#fff
+max-width:560px;margin:0 auto
+font-size:2rem;font-weight:700;margin-bottom:.5rem
+color:#94A3B8;margin-bottom:2rem
+display:flex;flex-direction:column;gap:1.25rem
+font-size:.875rem;font-weight:500;margin-bottom:.375rem
+width:100%;padding:.75rem 1rem;background:#1E293B;border:1px solid #334155;border-radius:8px;color:#fff
+font-size:.8125rem;color:#EF4444;margin-top:.375rem
+width:100%;padding:.75rem 1rem;background:#1E293B;border:1px solid #334155;border-radius:8px;color:#fff;resize:vertical
+background:#3B82F6;color:#fff;padding:.875rem 1.5rem;border-radius:8px;text-align:center;font-weight:600;cursor:pointer
+// END EXTRACTED STYLES
+
+<section class="contact" style="padding:80px 24px;background:#0F172A;color:#fff">
+  <div style="max-width:560px;margin:0 auto">
+    <h2 style="font-size:2rem;font-weight:700;margin-bottom:.5rem">Get in touch</h2>
+    <p style="color:#94A3B8;margin-bottom:2rem">We reply within one business day.</p>
+
+    <form style="display:flex;flex-direction:column;gap:1.25rem">
+      <div>
+        <div style="font-size:.875rem;font-weight:500;margin-bottom:.375rem">Name</div>
+        <input type="text" style="width:100%;padding:.75rem 1rem;background:#1E293B;border:1px solid #334155;border-radius:8px;color:#fff" />
+      </div>
+
+      <div>
+        <div style="font-size:.875rem;font-weight:500;margin-bottom:.375rem">Email</div>
+        <input type="email" style="width:100%;padding:.75rem 1rem;background:#1E293B;border:1px solid #334155;border-radius:8px;color:#fff" />
+        <p style="font-size:.8125rem;color:#EF4444;margin-top:.375rem">Please enter a valid email address.</p>
+      </div>
+
+      <div>
+        <div style="font-size:.875rem;font-weight:500;margin-bottom:.375rem">Message</div>
+        <textarea rows="5" style="width:100%;padding:.75rem 1rem;background:#1E293B;border:1px solid #334155;border-radius:8px;color:#fff;resize:vertical"></textarea>
+      </div>
+
+      <div style="background:#3B82F6;color:#fff;padding:.875rem 1.5rem;border-radius:8px;text-align:center;font-weight:600;cursor:pointer">Send message</div>
+    </form>
+  </div>
+</section>
+
+GENERATION INSTRUCTIONS
+You are converting a reference into a typed Next.js TSX component.
+Preserve LAYOUT INTENT. Replace all styling, library components, and incompatible logic with project equivalents.
+
+Begin with // FORGE NOTES: ref styling type detected, every import swap (ReferenceLib → ProjectLib), token mappings (reference value → project token), divergences with judgment call, incompatible logic replaced.
+
+IMPLEMENTATION
+1. Map EXTRACTED STYLES/CLASSNAMES → nearest design-arch tokens. Note all mappings and divergences in FORGE NOTES.
+2. Map external library components → design-arch equivalents. Note every swap in FORGE NOTES.
+3. Field types: text→string, rich text→block content, images→typed object with alt, links→conditional link, lists→typed array.
+4. Output order: types → data query additions → full component.
+5. Replace all reference styling with design-arch tokens.
+6. Replace all reference library components with design-arch equivalents.
+7. Replace incompatible logic with project-compatible patterns.
+8. Preserve layout intent: column count, stacking order, visual hierarchy.
+9. Use reference copy verbatim — no Lorem ipsum.
+
+ANTI-SLOP AESTHETIC GUARDRAIL
+Avoid generic AI-generated "template" aesthetics. Must feel hand-crafted for this project.
+  - No default hero gradients (from-blue-500 to-purple-600 and similar).
+  - No rainbow gradient text. Use design-arch foreground tokens.
+  - No placeholder icons that add nothing (SparkleIcon, CheckCircle as decoration).
+  - No "Get Started" / "Learn More" CTAs unless in the reference copy.
+  - No unnecessary emojis unless the reference uses them.
+  - No floating blur gradients as background filler without a design reason.
+  - No decorative 3-column "Feature" grids unless the reference has them.
+  - Match the reference's visual density; do not add padding or whitespace that wasn't there.
+If the reference is minimal, the output must also be minimal.
+
+ANTI-SLOP FIDELITY CHECK (required before writing output when an HTML ref is present):
+- [ ] Extract padding/margin values from ref CSS. Apply exact Tailwind equivalents.
+- [ ] Confirm background: dark (bg-foreground) vs light (bg-background).
+- [ ] Confirm decorative elements: patterns, watermarks, gradient overlays present or absent.
+- [ ] Confirm icon container: size, background, border-radius per ref.
+- [ ] Confirm button/CTA style: underline, filled, outlined per ref.
+Report each finding in FORGE NOTES before writing TSX.
+
+A11Y SIGNAL — WCAG 2.1 AA enforcement is active for this generation.
+
+Required:
+  - Semantic HTML: section/header/nav/main/article/aside/footer where implied. No unlabelled divs.
+  - Heading outline: one <h1> per page-level component; no skipped levels.
+  - Interactive elements (button, link, input) have accessible name: visible text, aria-label, or aria-labelledby.
+  - Images: alt="..." mandatory; decorative images use alt="" explicitly.
+  - Form inputs: every input has <label htmlFor> or aria-label.
+  - Icon-only buttons: require aria-label.
+  - Color never the only state indicator (add icon, text, or underline).
+  - Focus visible — don't override :focus-visible without a visible alternative (ring, outline, border).
+  - Contrast: AA ratios — normal text 4.5:1, large text 3:1. Note unknown token contrasts in FORGE NOTES.
+  - Interactive elements: min 44×44px tap targets (note exceptions).
+  - Dynamic regions: aria-live for toasts/status updates.
+  - Respect prefers-reduced-motion for transitions/animations.
+
+In FORGE NOTES, add A11Y sub-block: landmarks used, heading outline, aria-* attributes added, unresolved concerns.
+
+WRITE OUTPUT TO: output/Component.tsx
+Begin with // FORGE NOTES then raw TSX. No markdown fences. No preamble after FORGE NOTES.
+Multiple files: separate with // --- FILE: relative/path/to/file.tsx
+
+STANDARDS COMPLIANCE: In FORGE NOTES, list every consulted standard and how it was applied.
+  Example: "// 04-color-tokens: applied (bg-primary, text-primary-foreground — no raw hex)"

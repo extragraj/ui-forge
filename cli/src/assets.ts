@@ -36,10 +36,23 @@ export const FEATURE_DISPLAY: Record<FeatureId, string> = {
 
 /**
  * Standards source dirs to bridge into design/standards/ per theme.
- * Key: theme ID. Value: subdirectory under references/standards/ to copy.
+ *
+ * sourcePath: relative to skill root — folder of .md files to copy.
+ * destSubdir: subdirectory created under <project>/design/standards/.
+ *
+ * destSubdir is intentionally stable across folder reorgs so already-seeded
+ * project copies (e.g. design/standards/stackshift-ui/) keep working.
  */
-export const STANDARDS_BY_THEME: Partial<Record<ThemeId, string>> = {
-  stackshift: 'stackshift-ui',
+export interface ThemeStandardsConfig {
+  sourcePath: string;
+  destSubdir: string;
+}
+
+export const STANDARDS_BY_THEME: Partial<Record<ThemeId, ThemeStandardsConfig>> = {
+  stackshift: {
+    sourcePath: 'references/themes/stackshift/standards',
+    destSubdir: 'stackshift-ui',
+  },
 };
 
 export const RUNTIME_ASSETS = {
@@ -79,12 +92,12 @@ export const RUNTIME_ASSETS = {
     'plain-tailwind': { files: ['themes/plain-tailwind.json'] },
     stackshift: {
       files: ['themes/stackshift.json'],
-      forgeignore: 'references/default-stackshift-forgeignore.txt',
+      forgeignore: 'references/themes/stackshift/forgeignore.txt',
     },
     none: { files: [] },
   } as Record<ThemeId, ThemeAsset>,
 
-  defaultForgeignore: 'references/default-forgeignore.txt',
+  defaultForgeignore: 'references/forgeignore/default.txt',
 } as const;
 
 /**

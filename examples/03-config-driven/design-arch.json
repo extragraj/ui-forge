@@ -1,0 +1,28 @@
+{
+  "_version": 4,
+  "_theme": "shadcn",
+  "componentLib": "shadcn/ui",
+  "usedComponents": ["Button"],
+  "usedLibraries": ["next", "react"],
+  "tailwind": {
+    "themeSection": {
+      "colors": {
+        "primary": "hsl(220 90% 56%)"
+      },
+      "fontFamily": { "sans": ["Inter", "system-ui"] }
+    },
+    "colorTokens": "primary, slate-50..950, blue-500..700, white",
+    "darkColorTokens": ""
+  },
+  "globalCss": "@tailwind base; @tailwind components; @tailwind utilities;",
+  "designStandards": {},
+  "patterns": {
+    "spacing": "Section py-20 px-10; grid 3-up gap-6 desktop; pricing cards p-8 rounded-xl",
+    "typography": "Inter sans. h2 text-3xl bold center, price text-4xl bold, body text-sm",
+    "conventions": [
+      "Typed props derived from the +CONFIG ref (JSON schema becomes the prop interface)",
+      "Default export the section, named-export the typed props interface"
+    ]
+  },
+  "isStackShift": false
+}

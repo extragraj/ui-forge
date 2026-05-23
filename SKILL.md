@@ -1,6 +1,6 @@
 ---
 name: ui-forge
-version: 1.7.1
+version: 1.7.2
 description: 'Production Next.js component generator. Converts HTML, TSX, images, and JSON into project-compliant components using your design system. Triggers on component creation, HTML/TSX conversion, page generation, image-to-component tasks, or any frontend code generation request. Requires a one-time scan to build design/design-arch.json.'
 ---
 
@@ -303,9 +303,14 @@ Code format — raw TSX, no markdown fences:
 
 ```bash
 ls "$SKILL_ROOT/references/"
-# advanced-usage.md — config files, custom signals, troubleshooting, CI/CD
-# examples.md       — real-world conversion examples
-# prompt-patterns.md — signal composition and extension patterns
+# prompt-patterns.md          — signal composition (the only runtime asset)
+# docs/advanced-usage.md      — config files, custom signals, troubleshooting, CI/CD
+# docs/migration-guide.md     — upgrading between major versions
+# docs/versions.md            — Node / Next.js / library compatibility
+# docs/claude-design-handoff-format.md — --handoff URL shape
+# standards/index.md          — built-in design-standards index
+# themes.md                   — theme preset catalog
+# (examples live at $SKILL_ROOT/../../examples/index.md when running from the dev tree)
 ```
 
 **Requires:** Node.js ≥ 18

@@ -18,7 +18,7 @@
  * (the long random ID), so no ANTHROPIC_API_KEY is required. If a real URL
  * discovery run shows this assumption is wrong, add auth headers here.
  *
- * See references/claude-design-handoff-format.md for API shape notes.
+ * See references/docs/claude-design-handoff-format.md for API shape notes.
  */
 
 import { mkdirSync, writeFileSync } from 'node:fs'

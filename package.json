@@ -1,6 +1,6 @@
 {
   "name": "@extragraj/ui-forge",
-  "version": "1.7.1",
+  "version": "1.7.2",
   "description": "Production Next.js component generator for Claude Code and AI coding assistants. Standalone for any Next.js project or companion mode for StackShift-paired Sanity sites.",
   "type": "module",
   "bin": {
@@ -13,7 +13,7 @@
     "build": "pnpm --filter ui-forge-cli build",
     "sync-version": "node scripts/sync-version.mjs",
     "prepack": "pnpm sync-version && pnpm build",
-    "test": "node tests/run-cli-tests.mjs"
+    "test": "node tests/run.js"
   },
   "keywords": [
     "nextjs",

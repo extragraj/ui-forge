@@ -364,8 +364,10 @@ export async function runInit(cwd, flags) {
                 const designStandards = arch.designStandards && typeof arch.designStandards === 'object'
                     ? arch.designStandards
                     : null;
-                const keepStandardKey = STANDARDS_BY_THEME[selections.theme];
-                const themeStandardKeys = new Set(Object.values(STANDARDS_BY_THEME).filter((v) => !!v));
+                const keepStandardKey = STANDARDS_BY_THEME[selections.theme]?.destSubdir;
+                const themeStandardKeys = new Set(Object.values(STANDARDS_BY_THEME)
+                    .filter((v) => !!v)
+                    .map((v) => v.destSubdir));
                 const staleStandardKeys = designStandards
                     ? Object.keys(designStandards).filter((k) => themeStandardKeys.has(k) && k !== keepStandardKey)
                     : [];

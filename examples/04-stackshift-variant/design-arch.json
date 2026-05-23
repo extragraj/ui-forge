@@ -1,0 +1,35 @@
+{
+  "_version": 4,
+  "_theme": "stackshift",
+  "componentLib": "stackshift-ui",
+  "usedComponents": [],
+  "usedLibraries": ["@stackshift-ui/section", "@stackshift-ui/heading", "@stackshift-ui/text", "@stackshift-ui/button", "next"],
+  "tailwind": {
+    "themeSection": {
+      "colors": {
+        "primary": "hsl(var(--primary))",
+        "background": "hsl(var(--background))",
+        "foreground": "hsl(var(--foreground))"
+      },
+      "fontFamily": { "sans": ["Inter", "system-ui"] }
+    },
+    "colorTokens": "primary, background, foreground, muted, accent (HSL-CSS-var pattern)",
+    "darkColorTokens": "dark:bg-background, dark:text-foreground, dark:bg-muted"
+  },
+  "globalCss": "@layer base { :root { --background: 0 0% 100%; --foreground: 222 47% 11%; --primary: 220 90% 56%; } .dark { --background: 222 47% 11%; --foreground: 0 0% 100%; } }",
+  "designStandards": {
+    "stackshift-ui": "./design/standards/stackshift-ui"
+  },
+  "patterns": {
+    "spacing": "@stackshift-ui/section wraps content; gap-8 for cluster, py-20 for vertical rhythm",
+    "typography": "Inter sans. Heading components from @stackshift-ui/heading (variant prop); Text components from @stackshift-ui/text",
+    "conventions": [
+      "Import HeroVariantProps from the contract file; do NOT redefine the interface",
+      "Destructure every prop; use `?? undefined` for optionals",
+      "Return null when required props are absent",
+      "Default export only — no additional named exports",
+      "Use @stackshift-ui/* primitives, not raw HTML for headings/text/buttons"
+    ]
+  },
+  "isStackShift": true
+}

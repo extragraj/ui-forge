@@ -1,0 +1,111 @@
+=== UI FORGE ===
+SIGNAL: CONVERT_SECTION
+
+TASK
+Convert hero section into a typed Next.js component
+
+DESIGN AUTHORITY: design/design-arch.json
+  componentLib: shadcn/ui
+  tokens: primary, secondary, slate-50..950, blue-600/700, white
+  spacing: Section py-20 px-10; grid gap-8; stack mt-4/6 between elements
+  typography: Inter sans-serif. text-4xl bold for h1, text-lg for subtitle, text-sm for meta
+  usedComponents: Button
+  usedLibraries: , 
+  conventions:
+  - Use next/image for raster assets
+  - Default export the section component
+  - Tailwind utilities only — no custom CSS modules
+
+DESIGN STANDARDS (load as needed)
+// [REF] nextjs-image [../../../../../Garry Caber/Desktop/WebriQ/ui-forge/references/standards/nextjs-image.md]: **Scope:** Applies to any Next.js + Sanity + TypeScript project — not StackShift-specific. — READ FULL FILE
+
+REFERENCE [input/hero.html — html]
+// EXTRACTED STYLES — for token mapping, do not copy to output
+.hero-wrapper {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    padding: 80px 40px;
+    background: #f8fafc;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  .hero-content { display: flex; flex-direction: column; justify-content: center; }
+  .hero-title { font-size: 2.5rem; font-weight: 700; color: #0f172a; line-height: 1.2; }
+  .hero-subtitle { font-size: 1.125rem; color: #475569; margin-top: 1rem; max-width: 440px; }
+  .hero-cta {
+    display: inline-block;
+    margin-top: 1.5rem;
+    padding: 0.75rem 1.5rem;
+    background: #2563eb;
+    color: #fff;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 500;
+    align-self: flex-start;
+  }
+  .hero-note { margin-top: 0.75rem; font-size: 0.875rem; color: #94a3b8; }
+  .hero-media { display: flex; align-items: center; justify-content: flex-end; }
+  .hero-media img { width: 100%; max-width: 520px; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.1); }
+
+  @media (max-width: 768px) {
+    .hero-wrapper { grid-template-columns: 1fr; padding: 48px 24px; }
+    .hero-media { display: none; }
+  }
+// END EXTRACTED STYLES
+
+<section class="hero-wrapper">
+  <div class="hero-content">
+    <h1 class="hero-title">Build faster with AI</h1>
+    <p class="hero-subtitle">The component generator that reads your design system.</p>
+    <a href="/get-started" class="hero-cta">Get started free</a>
+    <p class="hero-note">No credit card required · Free plan available</p>
+  </div>
+  <div class="hero-media">
+    <img src="/dashboard-preview.png" alt="Platform dashboard preview" />
+  </div>
+</section>
+
+GENERATION INSTRUCTIONS
+You are converting a reference into a typed Next.js TSX component.
+Preserve LAYOUT INTENT. Replace all styling, library components, and incompatible logic with project equivalents.
+
+Begin with // FORGE NOTES: ref styling type detected, every import swap (ReferenceLib → ProjectLib), token mappings (reference value → project token), divergences with judgment call, incompatible logic replaced.
+
+IMPLEMENTATION
+1. Map EXTRACTED STYLES/CLASSNAMES → nearest design-arch tokens. Note all mappings and divergences in FORGE NOTES.
+2. Map external library components → design-arch equivalents. Note every swap in FORGE NOTES.
+3. Field types: text→string, rich text→block content, images→typed object with alt, links→conditional link, lists→typed array.
+4. Output order: types → data query additions → full component.
+5. Replace all reference styling with design-arch tokens.
+6. Replace all reference library components with design-arch equivalents.
+7. Replace incompatible logic with project-compatible patterns.
+8. Preserve layout intent: column count, stacking order, visual hierarchy.
+9. Use reference copy verbatim — no Lorem ipsum.
+
+ANTI-SLOP AESTHETIC GUARDRAIL
+Avoid generic AI-generated "template" aesthetics. Must feel hand-crafted for this project.
+  - No default hero gradients (from-blue-500 to-purple-600 and similar).
+  - No rainbow gradient text. Use design-arch foreground tokens.
+  - No placeholder icons that add nothing (SparkleIcon, CheckCircle as decoration).
+  - No "Get Started" / "Learn More" CTAs unless in the reference copy.
+  - No unnecessary emojis unless the reference uses them.
+  - No floating blur gradients as background filler without a design reason.
+  - No decorative 3-column "Feature" grids unless the reference has them.
+  - Match the reference's visual density; do not add padding or whitespace that wasn't there.
+If the reference is minimal, the output must also be minimal.
+
+ANTI-SLOP FIDELITY CHECK (required before writing output when an HTML ref is present):
+- [ ] Extract padding/margin values from ref CSS. Apply exact Tailwind equivalents.
+- [ ] Confirm background: dark (bg-foreground) vs light (bg-background).
+- [ ] Confirm decorative elements: patterns, watermarks, gradient overlays present or absent.
+- [ ] Confirm icon container: size, background, border-radius per ref.
+- [ ] Confirm button/CTA style: underline, filled, outlined per ref.
+Report each finding in FORGE NOTES before writing TSX.
+
+WRITE OUTPUT TO: output/Component.tsx
+Begin with // FORGE NOTES then raw TSX. No markdown fences. No preamble after FORGE NOTES.
+Multiple files: separate with // --- FILE: relative/path/to/file.tsx
+
+STANDARDS COMPLIANCE: In FORGE NOTES, list every consulted standard and how it was applied.
+  Example: "// 04-color-tokens: applied (bg-primary, text-primary-foreground — no raw hex)"

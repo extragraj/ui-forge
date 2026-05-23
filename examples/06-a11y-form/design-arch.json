@@ -1,0 +1,35 @@
+{
+  "_version": 4,
+  "_theme": "shadcn",
+  "componentLib": "shadcn/ui",
+  "usedComponents": ["Button", "Input", "Label", "Textarea"],
+  "usedLibraries": ["next", "react"],
+  "tailwind": {
+    "themeSection": {
+      "colors": {
+        "background": "hsl(222 47% 11%)",
+        "foreground": "hsl(0 0% 100%)",
+        "muted": "hsl(217 33% 17%)",
+        "border": "hsl(217 19% 27%)",
+        "destructive": "hsl(0 84% 60%)",
+        "primary": "hsl(217 91% 60%)"
+      },
+      "fontFamily": { "sans": ["Inter", "system-ui"] }
+    },
+    "colorTokens": "background, foreground, muted, border, primary, destructive, slate-50..950",
+    "darkColorTokens": ""
+  },
+  "globalCss": "@tailwind base; @tailwind components; @tailwind utilities;",
+  "designStandards": {},
+  "patterns": {
+    "spacing": "Section py-20 px-6; form stack gap-5; field label-input gap-1.5",
+    "typography": "Inter sans. h2 text-3xl bold, label text-sm medium, body text-base, error text-xs",
+    "conventions": [
+      "Inputs from shadcn/ui (semantic <Input>, <Label>, <Textarea>, <Button> elements)",
+      "Every interactive control has a programmatic label (htmlFor + id, not visual proximity)",
+      "Errors use aria-describedby; aria-invalid set when validation fails",
+      "Submit is a <button type='submit'>, never a styled div"
+    ]
+  },
+  "isStackShift": false
+}

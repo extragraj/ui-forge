@@ -14,12 +14,11 @@ export const FEATURE_DISPLAY = {
     'post-tool-verify-hook': 'Verify After Edit (Hook)',
     'project-cli': 'Project CLI Shim',
 };
-/**
- * Standards source dirs to bridge into design/standards/ per theme.
- * Key: theme ID. Value: subdirectory under references/standards/ to copy.
- */
 export const STANDARDS_BY_THEME = {
-    stackshift: 'stackshift-ui',
+    stackshift: {
+        sourcePath: 'references/themes/stackshift/standards',
+        destSubdir: 'stackshift-ui',
+    },
 };
 export const RUNTIME_ASSETS = {
     always: [
@@ -56,11 +55,11 @@ export const RUNTIME_ASSETS = {
         'plain-tailwind': { files: ['themes/plain-tailwind.json'] },
         stackshift: {
             files: ['themes/stackshift.json'],
-            forgeignore: 'references/default-stackshift-forgeignore.txt',
+            forgeignore: 'references/themes/stackshift/forgeignore.txt',
         },
         none: { files: [] },
     },
-    defaultForgeignore: 'references/default-forgeignore.txt',
+    defaultForgeignore: 'references/forgeignore/default.txt',
 };
 /**
  * Patterns that must never be copied into a target skill dir, even if

@@ -1,0 +1,30 @@
+{
+  "_version": 4,
+  "_theme": "shadcn",
+  "componentLib": "shadcn/ui",
+  "usedComponents": ["Button", "Card"],
+  "usedLibraries": ["next", "react"],
+  "tailwind": {
+    "themeSection": {
+      "colors": {
+        "primary": "hsl(220 90% 56%)",
+        "muted": "hsl(220 14% 96%)"
+      },
+      "fontFamily": { "sans": ["Inter", "system-ui"] }
+    },
+    "colorTokens": "primary, muted, slate-50..950, blue-600/700, white",
+    "darkColorTokens": ""
+  },
+  "globalCss": "@tailwind base; @tailwind components; @tailwind utilities;",
+  "designStandards": {},
+  "patterns": {
+    "spacing": "Page sections py-20 with gap-16 between; container max-w-7xl mx-auto px-6",
+    "typography": "Inter sans. h1 text-5xl, h2 text-3xl, h3 text-2xl, body text-base/text-lg",
+    "conventions": [
+      "Section-per-component composition",
+      "Default-export top-level Page; named-export sections",
+      "Use next/image for hero/feature artwork"
+    ]
+  },
+  "isStackShift": false
+}

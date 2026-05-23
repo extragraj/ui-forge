@@ -156,7 +156,7 @@ function install() {
   // Write .forgeignore from the general template if one doesn't already exist
   const forgeignorePath = join(cwd, '.forgeignore');
   if (!existsSync(forgeignorePath)) {
-    const template = join(SKILL_ROOT, 'references', 'default-forgeignore.txt');
+    const template = join(SKILL_ROOT, 'references', 'forgeignore', 'default.txt');
     if (existsSync(template)) {
       writeFileSync(forgeignorePath, readFileSync(template, 'utf8'), 'utf8');
       console.log('.forgeignore created from default template.\n');

@@ -1,0 +1,37 @@
+{
+  "_version": 4,
+  "_theme": "shadcn",
+  "componentLib": "shadcn/ui",
+  "usedComponents": [],
+  "usedLibraries": ["next", "react"],
+  "tailwind": {
+    "themeSection": {
+      "colors": {
+        "violet-50": "#FAF5FF",
+        "violet-200": "#E9D5FF",
+        "violet-600": "#7C3AED",
+        "violet-700": "#6D28D9",
+        "violet-900": "#4C1D95",
+        "indigo-950": "#1E1B4B"
+      },
+      "fontFamily": {
+        "sans": ["Inter", "system-ui"],
+        "display": ["Playfair Display", "serif"]
+      }
+    },
+    "colorTokens": "violet-50/200/600/700/900, indigo-950, white",
+    "darkColorTokens": ""
+  },
+  "globalCss": "@tailwind base; @tailwind components; @tailwind utilities;",
+  "designStandards": {},
+  "patterns": {
+    "spacing": "Section py-24 px-8; cluster gap-6; card p-8 rounded-2xl",
+    "typography": "Display = Playfair Display for h2; UI = Inter for everything else. No exclamation points (brand voice).",
+    "conventions": [
+      "Use brand palette tokens — do not introduce hex codes outside the brand tokens file",
+      "Section heading uses font-display (Playfair Display)",
+      "Body and meta text use Inter via font-sans (default)"
+    ]
+  },
+  "isStackShift": false
+}

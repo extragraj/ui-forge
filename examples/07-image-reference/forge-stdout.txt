@@ -1,0 +1,73 @@
+=== UI FORGE ===
+SIGNAL: CONVERT_SECTION +IMAGE
+
+TASK
+Convert features section with right-side image card
+
+DESIGN AUTHORITY: design/design-arch.json
+  componentLib: shadcn/ui
+  tokens: violet-100/500, slate-500/700/900, pink-500, white
+  spacing: Section py-20 px-8; left-grid gap-x-12 gap-y-10; right-card rounded-2xl shadow-sm
+  typography: Inter sans. h2 / heading text-2xl font-bold slate-900; body text-base slate-500 leading-relaxed
+  usedLibraries: , 
+  conventions:
+  - Use next/image for any photographic asset
+  - Icons are small violet tiles (rounded-md, bg-violet-100, p-2)
+  - Right-card link uses pink-500 + arrow glyph
+
+DESIGN STANDARDS (load as needed)
+// [REF] nextjs-image [../../../../../Garry Caber/Desktop/WebriQ/ui-forge/references/standards/nextjs-image.md]: **Scope:** Applies to any Next.js + Sanity + TypeScript project — not StackShift-specific. — READ FULL FILE
+
+IMAGES
+Read and analyze each image file below using your vision capability:
+  C:\Users\GARRYC~1\AppData\Local\Temp\forge-07-image-reference-sWKScW\input\features-section.png
+
+GENERATION INSTRUCTIONS
+You are converting a reference into a typed Next.js TSX component.
+Preserve LAYOUT INTENT. Replace all styling, library components, and incompatible logic with project equivalents.
+
+Begin with // FORGE NOTES: ref styling type detected, every import swap (ReferenceLib → ProjectLib), token mappings (reference value → project token), divergences with judgment call, incompatible logic replaced.
+
+IMPLEMENTATION
+1. Map EXTRACTED STYLES/CLASSNAMES → nearest design-arch tokens. Note all mappings and divergences in FORGE NOTES.
+2. Map external library components → design-arch equivalents. Note every swap in FORGE NOTES.
+3. Field types: text→string, rich text→block content, images→typed object with alt, links→conditional link, lists→typed array.
+4. Output order: types → data query additions → full component.
+5. Replace all reference styling with design-arch tokens.
+6. Replace all reference library components with design-arch equivalents.
+7. Replace incompatible logic with project-compatible patterns.
+8. Preserve layout intent: column count, stacking order, visual hierarchy.
+9. Use reference copy verbatim — no Lorem ipsum.
+
+ANTI-SLOP AESTHETIC GUARDRAIL
+Avoid generic AI-generated "template" aesthetics. Must feel hand-crafted for this project.
+  - No default hero gradients (from-blue-500 to-purple-600 and similar).
+  - No rainbow gradient text. Use design-arch foreground tokens.
+  - No placeholder icons that add nothing (SparkleIcon, CheckCircle as decoration).
+  - No "Get Started" / "Learn More" CTAs unless in the reference copy.
+  - No unnecessary emojis unless the reference uses them.
+  - No floating blur gradients as background filler without a design reason.
+  - No decorative 3-column "Feature" grids unless the reference has them.
+  - Match the reference's visual density; do not add padding or whitespace that wasn't there.
+If the reference is minimal, the output must also be minimal.
+
+ANTI-SLOP FIDELITY CHECK (required before writing output when an HTML ref is present):
+- [ ] Extract padding/margin values from ref CSS. Apply exact Tailwind equivalents.
+- [ ] Confirm background: dark (bg-foreground) vs light (bg-background).
+- [ ] Confirm decorative elements: patterns, watermarks, gradient overlays present or absent.
+- [ ] Confirm icon container: size, background, border-radius per ref.
+- [ ] Confirm button/CTA style: underline, filled, outlined per ref.
+Report each finding in FORGE NOTES before writing TSX.
+
+IMAGE SIGNAL — a visual reference image is attached.
+  Analyze: layout structure, column count, visual hierarchy, component types.
+  Map colors and spacing to design-arch tokens. Note mappings in FORGE NOTES.
+  Image wins for proportions and hierarchy. Design-arch wins for tokens.
+  Reference file (if also present) wins for layout structure over the image.
+
+WRITE OUTPUT TO: output/Component.tsx
+Begin with // FORGE NOTES then raw TSX. No markdown fences. No preamble after FORGE NOTES.
+Multiple files: separate with // --- FILE: relative/path/to/file.tsx
+
+STANDARDS COMPLIANCE: In FORGE NOTES, list every consulted standard and how it was applied.
+  Example: "// 04-color-tokens: applied (bg-primary, text-primary-foreground — no raw hex)"

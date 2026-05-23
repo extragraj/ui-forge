@@ -357,8 +357,9 @@ function copyBuiltinStandard(srcName, destName) {
   } catch { return false }
 }
 
-function copyBuiltinStandardDir(srcDir, destDir) {
-  const src = join(CLAUDE_SKILL_DIR, 'references', 'standards', srcDir)
+// srcRelPath is relative to skill root (e.g. 'references/themes/stackshift/standards').
+function copyBuiltinStandardDir(srcRelPath, destDir) {
+  const src = join(CLAUDE_SKILL_DIR, ...srcRelPath.split('/'))
   const dest = join(PROJECT_ROOT, 'design', 'standards', destDir)
   if (!existsSync(src)) return false
   // File-level idempotency: skip files that already exist in the project copy
@@ -405,7 +406,7 @@ function findDesignStandards(isStackShift) {
 
   // Issue 4: Copy stackshift-ui standards directory to project when StackShift
   if (isStackShift) {
-    const stackshiftUiCopied = copyBuiltinStandardDir('stackshift-ui', 'stackshift-ui')
+    const stackshiftUiCopied = copyBuiltinStandardDir('references/themes/stackshift/standards', 'stackshift-ui')
     if (stackshiftUiCopied) {
       process.stderr.write('  copied built-in standard: stackshift-ui/\n')
     }
@@ -430,7 +431,7 @@ function findDesignStandards(isStackShift) {
       standards['stackshift-ui'] = './design/standards/stackshift-ui'
     } else {
       // Fall back to built-in path if project copy doesn't exist
-      const builtinPath = join(CLAUDE_SKILL_DIR, 'references', 'standards', 'stackshift-ui')
+      const builtinPath = join(CLAUDE_SKILL_DIR, 'references', 'themes', 'stackshift', 'standards')
       if (existsSync(builtinPath)) {
         standards['stackshift-ui'] = './' + relative(PROJECT_ROOT, builtinPath).replace(/\\/g, '/')
       }
@@ -629,8 +630,8 @@ function mergeForgeignoreLines(existingContent, stackshiftContent) {
 
 function handleStackshiftForgeignore() {
   const forgeignorePath = join(PROJECT_ROOT, '.forgeignore')
-  const stackshiftTemplate = join(CLAUDE_SKILL_DIR, 'references', 'default-stackshift-forgeignore.txt')
-  const defaultTemplate = join(CLAUDE_SKILL_DIR, 'references', 'default-forgeignore.txt')
+  const stackshiftTemplate = join(CLAUDE_SKILL_DIR, 'references', 'themes', 'stackshift', 'forgeignore.txt')
+  const defaultTemplate = join(CLAUDE_SKILL_DIR, 'references', 'forgeignore', 'default.txt')
 
   if (!existsSync(stackshiftTemplate)) return
 

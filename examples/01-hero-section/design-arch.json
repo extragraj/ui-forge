@@ -1,0 +1,30 @@
+{
+  "_version": 4,
+  "_theme": "shadcn",
+  "componentLib": "shadcn/ui",
+  "usedComponents": ["Button"],
+  "usedLibraries": ["next", "react"],
+  "tailwind": {
+    "themeSection": {
+      "colors": {
+        "primary": "hsl(220 90% 56%)",
+        "secondary": "hsl(220 14% 96%)"
+      },
+      "fontFamily": { "sans": ["Inter", "system-ui"] }
+    },
+    "colorTokens": "primary, secondary, slate-50..950, blue-600/700, white",
+    "darkColorTokens": ""
+  },
+  "globalCss": "@tailwind base; @tailwind components; @tailwind utilities;",
+  "designStandards": {},
+  "patterns": {
+    "spacing": "Section py-20 px-10; grid gap-8; stack mt-4/6 between elements",
+    "typography": "Inter sans-serif. text-4xl bold for h1, text-lg for subtitle, text-sm for meta",
+    "conventions": [
+      "Use next/image for raster assets",
+      "Default export the section component",
+      "Tailwind utilities only — no custom CSS modules"
+    ]
+  },
+  "isStackShift": false
+}

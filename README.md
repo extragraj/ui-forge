@@ -4,7 +4,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org)
 [![Skills Compatible](https://img.shields.io/badge/skills-compatible-blue)](https://github.com/vercel/skills-cli)
 
-> **Version** 1.7.1
+> **Version** 1.7.2
 
 Next.js component generator for Codex CLI, Claude Code, and other AI coding assistants. Converts HTML, TSX, images, and JSON reference materials into production-ready components that match your project's existing design system — using your actual component libraries, Tailwind tokens, and coding conventions.
 
@@ -355,7 +355,7 @@ Themes are **gap-fill only** — scan findings always win. A theme fills `compon
 
 **StackShift Theme Specific Behavior:** `--theme stackshift` does the following beyond gap-fill:
 - Forces `isStackShift: true` in `design-arch.json` so the built-in `stackshift-ui` design standards are always injected at forge time — even on empty codebases or with `--quick`.
-- Copies `references/standards/stackshift-ui/` to `design/standards/stackshift-ui/` (project-local, versionable, editable) and records the project-local path under `designStandards["stackshift-ui"]`.
+- Copies `references/themes/stackshift/standards/` to `design/standards/stackshift-ui/` (project-local, versionable, editable) and records the project-local path under `designStandards["stackshift-ui"]`.
 - Copies general built-in standard (`nextjs-image.md`) to `design/standards/` and auto-registers it. `sample-standard.md` is a template for users to copy, not an active standard — it remains in `references/standards/` as documentation only.
 - Handles `.forgeignore` with three-way logic: creates from StackShift template if missing, overwrites if it's a UI Forge template, or appends StackShift exclusions to an existing custom file.
 - Preserves the `_paired` mirror block in `design-arch.json` on re-scan so StackShift paired-mode markers are never lost.
@@ -371,7 +371,7 @@ node ui-forge.mjs scan --theme stackshift --theme-override --no-backup
 
 > ⚠️ `--theme-override` modifies project files on disk. `.bak` backup files are created by default. Running again on already-overridden files is idempotent. Non-Google-Fonts `@import` lines are preserved.
 
-See [Built-in Themes](./themes/README.md) for the full preset list and merge rules.
+See [Built-in Themes](./references/themes.md) for the full preset list and merge rules.
 
 ### Multiple Reference Inputs
 
@@ -474,12 +474,14 @@ Exit `1` on violations (missing default export, disallowed named exports, requir
 ## Documentation
 
 - **[SKILL.md](./SKILL.md)** — Complete skill reference: signals, CLI flags, output format, resolution priority
-- **[Advanced Usage](./references/advanced-usage.md)** — PostToolUse auto-verify hook, custom signals, troubleshooting, CI/CD integration
-- **[Examples](./references/examples.md)** — Real-world conversion walkthroughs with full outputs
+- **[Advanced Usage](./references/docs/advanced-usage.md)** — PostToolUse auto-verify hook, custom signals, troubleshooting, CI/CD integration
+- **[Examples](./examples/index.md)** — Real-world conversion walkthroughs with full outputs and captured `forge-stdout.txt`
 - **[Prompt Patterns](./references/prompt-patterns.md)** — Signal composition reference for extending UI Forge
-- **[Built-in Themes](./themes/README.md)** — Available theme starters (`shadcn`, `stackshift`), merge behavior, and how to apply via `scan.js --theme <name>`
-- **[Built-in Design Standards](./references/standards/README.md)** — `stackshift-ui` built-in standard (consolidated StackShift UI conventions), resolution order, and how to author project-local overrides
-- **[Versions](./references/versions.md)** — Node, Next.js, StackShift, component library compatibility matri
+- **[Built-in Themes](./references/themes.md)** — Available theme starters (`shadcn`, `stackshift`), merge behavior, and how to apply via `scan.js --theme <name>`
+- **[Built-in Design Standards](./references/standards/index.md)** — `stackshift-ui` built-in standard (consolidated StackShift UI conventions), resolution order, and how to author project-local overrides
+- **[Migration Guide](./references/docs/migration-guide.md)** — Upgrading between major versions
+- **[Claude Design Handoff Format](./references/docs/claude-design-handoff-format.md)** — `--handoff` URL shape and ref materialization
+- **[Versions](./references/docs/versions.md)** — Node, Next.js, StackShift, component library compatibility matrix
 
 **Scan Script Flags** (`scripts/scan.js`):
 
@@ -508,6 +510,7 @@ Full release notes are in [`change-logs/`](./change-logs/).
 
 | Version | Date | Notes |
 |---------|------|-------|
+| [1.7.2](./change-logs/1-7-2-folder-reorg-and-test-runner.md) | 2026-05-23 | Folder reorganization, examples expansion, and a single tabular test runner. **References tree restructured**: docs moved to `references/docs/`, forgeignore template to `references/forgeignore/default.txt`, stackshift assets consolidated under `references/themes/stackshift/` (forgeignore + standards), `themes/README.md` renamed to `references/themes.md`, `references/standards/README.md` renamed to `index.md`. **Examples promoted to top-level surface**: `examples/index.md` is now the router; every numbered example carries `design-arch.json` + captured `forge-stdout.txt` for reproducibility. Added `05-brand-tokens` (+BRAND), `06-a11y-form` (+A11Y), `07-image-reference` (+IMAGE) walkthroughs. **`STANDARDS_BY_THEME` shape changed** to `{ sourcePath, destSubdir }` — decouples source location from the stable `design/standards/stackshift-ui/` destination so existing project copies keep working. **Single test runner**: 6 pre-1.7.2 `.mjs` test files replaced with `tests/run.js` — tabular output (PASS/FAIL/SKIP, per-test duration), 8 suites, ephemeral sandboxes that always clean up, `pnpm test -- --only=...` filter. **Legacy-sweep** keeps every old pre-1.7.2 path explicitly so existing skill dirs continue to clean up on re-install. Nothing changes about what's installed in target skill dirs — `prompt-patterns.md` is still the only `references/` runtime asset; `design/standards/stackshift-ui/` is still the destination. 25/25 tests passing. |
 | [1.7.1](./change-logs/1-7-1-install-sweep-and-slash-fixes.md) | 2026-05-23 | Install sweep gaps + cross-platform slash commands. **(1) Source-bundle files leaking into the installed skill dir** — `commands/`, `LICENSE`, `package.json`, `package-lock.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `README.md`, and `skill.version` could end up inside `<scope>/skills/ui-forge/` from earlier installers or hand-extracted tarballs and were never removed by re-install, because none of them matched a `LEGACY_PATTERNS` rule (or a `NEVER_COPY` rule as defense-in-depth). Added all eight patterns to both lists in `cli/src/assets.ts` and `cli/src/legacy-sweep.ts`; `init`, `repair`, and `doctor --fix` now sweep them. **(2) Slash commands broken outside Claude Code** — every `commands/*.md` template used Claude Code's `!`-prefix eager shell substitution, which is a Claude-only extension. On Cline, Cursor, Codex, Copilot, and Gemini Antigravity those `!` lines render as inert markdown text and the underlying scripts never run; on Claude they run eagerly at load time. **(3) `/forge-scan` crash** — the second `!` line in the old `forge-scan.md` eagerly invoked `apply-synthesis.js '<your-json-here>'` with the literal placeholder before the AI ever synthesized JSON, producing `JSON parse error — Unexpected token '<'`. Every `commands/*.md` template rewritten as platform-agnostic AI instructions: fenced ``` ```\nnode … ``` ``` code blocks the host AI runs through its own bash/terminal tool, with explicit guidance to prompt the user for missing arguments instead of running with empty `$ARGUMENTS`. `wiring/commands.ts` still substitutes `$CLAUDE_PLUGIN_ROOT` at install time so the rendered command contains a real absolute path. 10 new integration tests (123 total). |
 | [1.7.0](./change-logs/1-7-0-windows-hook-and-standards-crash.md) | 2026-05-22 | Two runtime bug fixes. **(1) invoke.js standards crash**: `loadDesignStandards` Step 3 called `readdirSync` on `references/standards/` inside the skill dir unconditionally — that directory is intentionally absent from installed instances (NEVER_COPY; content is seeded to `design/standards/` at install time by `bootstrapDesignStandards`). Every installed invocation that didn't already have all standards in `design/standards/` would crash with `ENOENT`. Fixed by guarding Step 3 with `existsSync(BUILTIN_STANDARDS_DIR)`; dev-tree runs (source checkout) still use the fallback. **(2) PostToolUse hook on Windows**: on Windows, PowerShell expands `"$CLAUDE_TOOL_INPUT_file_path"` in the hook command string to an empty string (PowerShell variables use `$env:VAR` syntax, not `$VAR`), so `verify.js` received an empty first argument, hit the usage-error guard (`!outputArg`), and exited with code 2 — surfaced as a blocking PostToolUse error after every edit. Fixed in `verify.js` by falling back to `process.env['CLAUDE_TOOL_INPUT_file_path']` when `argv[2]` is empty, making the hook work cross-platform. Documentation updated: "Built-in Design Standards" section now accurately describes the install-time seeding model rather than implying `references/standards/` is a runtime lookup; stale link to `references/standards/README.md` removed; hook table entry updated to mention fast-exit behavior. |
 | [1.6.10](./change-logs/1-6-10-legacy-sweep-broaden.md) | 2026-05-22 | Legacy sweep broadening. Three categories of stale files left in target skill dirs by pre-1.6.0 installs were silently kept by previous sweeps because they didn't match any `LEGACY_PATTERNS` rule: **(1)** stray `design/` directories inside the skill dir (the design authority belongs at the project root, never in `.claude/skills/ui-forge/`); **(2)** every file under `references/` except `prompt-patterns.md` — `advanced-usage.md`, `migration-guide.md`, `versions.md`, `examples.md`, `claude-design-handoff-format.md`, `default-*forgeignore.txt`, and the entire `references/standards/` subtree are source-bundle metadata that the installer reads from its own package dir, not runtime assets the target needs; **(3)** `themes/README.md` (the only runtime theme asset is `themes/<selected>.json`). All three patterns added to `LEGACY_PATTERNS` in `cli/src/legacy-sweep.ts` (so `init`, `repair`, and `doctor --fix` now prune them) and mirrored in `NEVER_COPY` in `cli/src/assets.ts` (so accidentally-included files in a future source bundle would be filtered before write). Confirms: **`repair` runs the legacy sweep** — it delegates to `runInit` with `yes: true`, which calls `sweep()` per platform in `delete` mode. |

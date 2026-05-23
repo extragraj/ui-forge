@@ -404,9 +404,11 @@ export async function runInit(cwd: string, flags: ParsedFlags): Promise<InstallR
             ? (arch.designStandards as Record<string, unknown>)
             : null;
 
-        const keepStandardKey = STANDARDS_BY_THEME[selections.theme];
+        const keepStandardKey = STANDARDS_BY_THEME[selections.theme]?.destSubdir;
         const themeStandardKeys = new Set(
-          Object.values(STANDARDS_BY_THEME).filter((v): v is string => !!v)
+          Object.values(STANDARDS_BY_THEME)
+            .filter((v): v is NonNullable<typeof v> => !!v)
+            .map((v) => v.destSubdir)
         );
         const staleStandardKeys = designStandards
           ? Object.keys(designStandards).filter(

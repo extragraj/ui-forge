@@ -1,0 +1,134 @@
+=== UI FORGE ===
+SIGNAL: CONVERT_SECTION +BRAND
+
+TASK
+Convert featured section using brand.tokens.json as the brand authority
+
+DESIGN AUTHORITY: design/design-arch.json
+  componentLib: shadcn/ui
+  tokens: violet-50/200/600/700/900, indigo-950, white
+  spacing: Section py-24 px-8; cluster gap-6; card p-8 rounded-2xl
+  typography: Display = Playfair Display for h2; UI = Inter for everything else. No exclamation points (brand voice).
+  usedLibraries: , 
+  conventions:
+  - Use brand palette tokens — do not introduce hex codes outside the brand tokens file
+  - Section heading uses font-display (Playfair Display)
+  - Body and meta text use Inter via font-sans (default)
+
+DESIGN STANDARDS (load as needed)
+// [REF] nextjs-image [../../../../../Garry Caber/Desktop/WebriQ/ui-forge/references/standards/nextjs-image.md]: **Scope:** Applies to any Next.js + Sanity + TypeScript project — not StackShift-specific. — READ FULL FILE
+
+REFERENCE [input/featured.html — html]
+// EXTRACTED STYLES — for token mapping, do not copy to output
+/* inline styles */
+padding:96px 32px;background:#FAF5FF
+max-width:1100px;margin:0 auto;text-align:center
+font-size:.875rem;font-weight:600;color:#7C3AED;text-transform:uppercase;letter-spacing:.08em
+font-family:'Playfair Display',serif;font-size:2.5rem;font-weight:700;color:#1E1B4B;margin-top:.5rem
+font-size:1.125rem;color:#4C1D95;margin-top:1rem;max-width:620px;margin-inline:auto
+display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem;margin-top:3rem;text-align:left
+padding:2rem;background:#fff;border:1px solid #E9D5FF;border-radius:16px
+font-size:1.125rem;font-weight:600;color:#1E1B4B
+font-size:.9375rem;color:#6D28D9;margin-top:.5rem
+// END EXTRACTED STYLES
+
+<section style="padding:96px 32px;background:#FAF5FF">
+  <div style="max-width:1100px;margin:0 auto;text-align:center">
+    <p style="font-size:.875rem;font-weight:600;color:#7C3AED;text-transform:uppercase;letter-spacing:.08em">Why teams switch</p>
+    <h2 style="font-family:'Playfair Display',serif;font-size:2.5rem;font-weight:700;color:#1E1B4B;margin-top:.5rem">A workspace that earns its place</h2>
+    <p style="font-size:1.125rem;color:#4C1D95;margin-top:1rem;max-width:620px;margin-inline:auto">
+      Production-grade rituals — design tokens, peer review, audit trail — built in from day one.
+    </p>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem;margin-top:3rem;text-align:left">
+      <div style="padding:2rem;background:#fff;border:1px solid #E9D5FF;border-radius:16px">
+        <h3 style="font-size:1.125rem;font-weight:600;color:#1E1B4B">Design tokens</h3>
+        <p style="font-size:.9375rem;color:#6D28D9;margin-top:.5rem">One source of truth; no copy-paste hex codes.</p>
+      </div>
+      <div style="padding:2rem;background:#fff;border:1px solid #E9D5FF;border-radius:16px">
+        <h3 style="font-size:1.125rem;font-weight:600;color:#1E1B4B">Peer review</h3>
+        <p style="font-size:.9375rem;color:#6D28D9;margin-top:.5rem">Every component passes through structured critique.</p>
+      </div>
+      <div style="padding:2rem;background:#fff;border:1px solid #E9D5FF;border-radius:16px">
+        <h3 style="font-size:1.125rem;font-weight:600;color:#1E1B4B">Audit trail</h3>
+        <p style="font-size:.9375rem;color:#6D28D9;margin-top:.5rem">Every change traceable to a reviewer and a rationale.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+BRAND [input/brand.tokens.json]
+{
+  "_note": "BRAND ref — authoritative palette, typography, and voice. Generation must respect these tokens over ad-hoc choices in the HTML ref.",
+  "brand": {
+    "name": "Indigo Atelier",
+    "voice": "Confident, plainspoken, no exclamation points."
+  },
+  "palette": {
+    "primary": { "hex": "#7C3AED", "name": "atelier-violet", "tailwind": "violet-600" },
+    "primary-foreground": { "hex": "#FFFFFF", "tailwind": "white" },
+    "ink": { "hex": "#1E1B4B", "tailwind": "indigo-950" },
+    "muted-ink": { "hex": "#4C1D95", "tailwind": "violet-900" },
+    "support-ink": { "hex": "#6D28D9", "tailwind": "violet-700" },
+    "tint": { "hex": "#FAF5FF", "tailwind": "violet-50" },
+    "hairline": { "hex": "#E9D5FF", "tailwind": "violet-200" }
+  },
+  "typography": {
+    "display": { "family": "Playfair Display", "weights": [700], "use": "Section headings only" },
+    "ui": { "family": "Inter", "weights": [400, 500, 600], "use": "Subheads, body, captions" }
+  },
+  "spacing": {
+    "section": "py-24 px-8",
+    "cluster": "gap-6",
+    "card": "p-8 rounded-2xl"
+  }
+}
+
+
+GENERATION INSTRUCTIONS
+You are converting a reference into a typed Next.js TSX component.
+Preserve LAYOUT INTENT. Replace all styling, library components, and incompatible logic with project equivalents.
+
+Begin with // FORGE NOTES: ref styling type detected, every import swap (ReferenceLib → ProjectLib), token mappings (reference value → project token), divergences with judgment call, incompatible logic replaced.
+
+IMPLEMENTATION
+1. Map EXTRACTED STYLES/CLASSNAMES → nearest design-arch tokens. Note all mappings and divergences in FORGE NOTES.
+2. Map external library components → design-arch equivalents. Note every swap in FORGE NOTES.
+3. Field types: text→string, rich text→block content, images→typed object with alt, links→conditional link, lists→typed array.
+4. Output order: types → data query additions → full component.
+5. Replace all reference styling with design-arch tokens.
+6. Replace all reference library components with design-arch equivalents.
+7. Replace incompatible logic with project-compatible patterns.
+8. Preserve layout intent: column count, stacking order, visual hierarchy.
+9. Use reference copy verbatim — no Lorem ipsum.
+
+ANTI-SLOP AESTHETIC GUARDRAIL
+Avoid generic AI-generated "template" aesthetics. Must feel hand-crafted for this project.
+  - No default hero gradients (from-blue-500 to-purple-600 and similar).
+  - No rainbow gradient text. Use design-arch foreground tokens.
+  - No placeholder icons that add nothing (SparkleIcon, CheckCircle as decoration).
+  - No "Get Started" / "Learn More" CTAs unless in the reference copy.
+  - No unnecessary emojis unless the reference uses them.
+  - No floating blur gradients as background filler without a design reason.
+  - No decorative 3-column "Feature" grids unless the reference has them.
+  - Match the reference's visual density; do not add padding or whitespace that wasn't there.
+If the reference is minimal, the output must also be minimal.
+
+ANTI-SLOP FIDELITY CHECK (required before writing output when an HTML ref is present):
+- [ ] Extract padding/margin values from ref CSS. Apply exact Tailwind equivalents.
+- [ ] Confirm background: dark (bg-foreground) vs light (bg-background).
+- [ ] Confirm decorative elements: patterns, watermarks, gradient overlays present or absent.
+- [ ] Confirm icon container: size, background, border-radius per ref.
+- [ ] Confirm button/CTA style: underline, filled, outlined per ref.
+Report each finding in FORGE NOTES before writing TSX.
+
+BRAND SIGNAL — brand guidance is active.
+  Authority: brand doc wins for voice/tone, colors, brand-mandated typography, imagery. design-arch wins for implementation tokens (tailwind, shadcn, spacing). Map brand values onto design-arch tokens; record divergences — do not invent new tokens.
+
+In FORGE NOTES, add BRAND sub-block: voice adjustments, brand color → token mappings (+ divergences), typography decisions.
+
+WRITE OUTPUT TO: output/Component.tsx
+Begin with // FORGE NOTES then raw TSX. No markdown fences. No preamble after FORGE NOTES.
+Multiple files: separate with // --- FILE: relative/path/to/file.tsx
+
+STANDARDS COMPLIANCE: In FORGE NOTES, list every consulted standard and how it was applied.
+  Example: "// 04-color-tokens: applied (bg-primary, text-primary-foreground — no raw hex)"

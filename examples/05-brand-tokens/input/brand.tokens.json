@@ -1,0 +1,25 @@
+{
+  "_note": "BRAND ref — authoritative palette, typography, and voice. Generation must respect these tokens over ad-hoc choices in the HTML ref.",
+  "brand": {
+    "name": "Indigo Atelier",
+    "voice": "Confident, plainspoken, no exclamation points."
+  },
+  "palette": {
+    "primary": { "hex": "#7C3AED", "name": "atelier-violet", "tailwind": "violet-600" },
+    "primary-foreground": { "hex": "#FFFFFF", "tailwind": "white" },
+    "ink": { "hex": "#1E1B4B", "tailwind": "indigo-950" },
+    "muted-ink": { "hex": "#4C1D95", "tailwind": "violet-900" },
+    "support-ink": { "hex": "#6D28D9", "tailwind": "violet-700" },
+    "tint": { "hex": "#FAF5FF", "tailwind": "violet-50" },
+    "hairline": { "hex": "#E9D5FF", "tailwind": "violet-200" }
+  },
+  "typography": {
+    "display": { "family": "Playfair Display", "weights": [700], "use": "Section headings only" },
+    "ui": { "family": "Inter", "weights": [400, 500, 600], "use": "Subheads, body, captions" }
+  },
+  "spacing": {
+    "section": "py-24 px-8",
+    "cluster": "gap-6",
+    "card": "p-8 rounded-2xl"
+  }
+}

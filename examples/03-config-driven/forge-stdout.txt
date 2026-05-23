@@ -1,0 +1,185 @@
+=== UI FORGE ===
+SIGNAL: CONVERT_SECTION +CONFIG
+
+TASK
+Convert pricing section; use pricing-data.json as the data shape
+
+DESIGN AUTHORITY: design/design-arch.json
+  componentLib: shadcn/ui
+  tokens: primary, slate-50..950, blue-500..700, white
+  spacing: Section py-20 px-10; grid 3-up gap-6 desktop; pricing cards p-8 rounded-xl
+  typography: Inter sans. h2 text-3xl bold center, price text-4xl bold, body text-sm
+  usedComponents: Button
+  usedLibraries: , 
+  conventions:
+  - Typed props derived from the +CONFIG ref (JSON schema becomes the prop interface)
+  - Default export the section, named-export the typed props interface
+
+DESIGN STANDARDS (load as needed)
+// [REF] nextjs-image [../../../../../Garry Caber/Desktop/WebriQ/ui-forge/references/standards/nextjs-image.md]: **Scope:** Applies to any Next.js + Sanity + TypeScript project — not StackShift-specific. — READ FULL FILE
+
+REFERENCE [input/pricing.html — html]
+// EXTRACTED STYLES — for token mapping, do not copy to output
+/* inline styles */
+padding:80px 40px;background:#f8fafc
+text-align:center;font-size:2rem;font-weight:700;color:#0f172a
+text-align:center;color:#64748b;margin-top:.5rem
+display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem;margin-top:3rem;max-width:1000px;margin-inline:auto
+padding:2rem;background:#fff;border:1px solid #e2e8f0;border-radius:12px
+font-size:.875rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.05em
+font-size:2.25rem;font-weight:700;color:#0f172a;margin-top:.5rem
+font-size:1rem;font-weight:400;color:#94a3b8
+margin-top:1.5rem;list-style:none;padding:0;display:flex;flex-direction:column;gap:.75rem
+color:#475569;font-size:.9375rem
+display:block;margin-top:2rem;padding:.75rem;text-align:center;border:1px solid #cbd5e1;border-radius:8px;color:#475569;text-decoration:none;font-weight:500
+padding:2rem;background:#1e3a8a;border-radius:12px;position:relative
+position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:#3b82f6;color:#fff;font-size:.75rem;font-weight:600;padding:.25rem .75rem;border-radius:999px
+font-size:.875rem;font-weight:600;color:#93c5fd;text-transform:uppercase;letter-spacing:.05em
+font-size:2.25rem;font-weight:700;color:#fff;margin-top:.5rem
+font-size:1rem;font-weight:400;color:#93c5fd
+color:#dbeafe;font-size:.9375rem
+display:block;margin-top:2rem;padding:.75rem;text-align:center;background:#3b82f6;border-radius:8px;color:#fff;text-decoration:none;font-weight:600
+// END EXTRACTED STYLES
+
+<section class="pricing" style="padding:80px 40px;background:#f8fafc">
+  <h2 style="text-align:center;font-size:2rem;font-weight:700;color:#0f172a">Simple, honest pricing</h2>
+  <p style="text-align:center;color:#64748b;margin-top:.5rem">No hidden fees. Cancel anytime.</p>
+
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem;margin-top:3rem;max-width:1000px;margin-inline:auto">
+
+    
+    <div style="padding:2rem;background:#fff;border:1px solid #e2e8f0;border-radius:12px">
+      <p style="font-size:.875rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Starter</p>
+      <p style="font-size:2.25rem;font-weight:700;color:#0f172a;margin-top:.5rem">$0<span style="font-size:1rem;font-weight:400;color:#94a3b8">/mo</span></p>
+      <ul style="margin-top:1.5rem;list-style:none;padding:0;display:flex;flex-direction:column;gap:.75rem">
+        <li style="color:#475569;font-size:.9375rem">✓ 3 projects</li>
+        <li style="color:#475569;font-size:.9375rem">✓ 5GB storage</li>
+        <li style="color:#475569;font-size:.9375rem">✓ Community support</li>
+      </ul>
+      <a href="/signup" style="display:block;margin-top:2rem;padding:.75rem;text-align:center;border:1px solid #cbd5e1;border-radius:8px;color:#475569;text-decoration:none;font-weight:500">Get started</a>
+    </div>
+
+    
+    <div style="padding:2rem;background:#1e3a8a;border-radius:12px;position:relative">
+      <span style="position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:#3b82f6;color:#fff;font-size:.75rem;font-weight:600;padding:.25rem .75rem;border-radius:999px">Most popular</span>
+      <p style="font-size:.875rem;font-weight:600;color:#93c5fd;text-transform:uppercase;letter-spacing:.05em">Pro</p>
+      <p style="font-size:2.25rem;font-weight:700;color:#fff;margin-top:.5rem">$49<span style="font-size:1rem;font-weight:400;color:#93c5fd">/mo</span></p>
+      <ul style="margin-top:1.5rem;list-style:none;padding:0;display:flex;flex-direction:column;gap:.75rem">
+        <li style="color:#dbeafe;font-size:.9375rem">✓ Unlimited projects</li>
+        <li style="color:#dbeafe;font-size:.9375rem">✓ 100GB storage</li>
+        <li style="color:#dbeafe;font-size:.9375rem">✓ Priority support</li>
+        <li style="color:#dbeafe;font-size:.9375rem">✓ Team collaboration</li>
+      </ul>
+      <a href="/signup-pro" style="display:block;margin-top:2rem;padding:.75rem;text-align:center;background:#3b82f6;border-radius:8px;color:#fff;text-decoration:none;font-weight:600">Start free trial</a>
+    </div>
+
+    
+    <div style="padding:2rem;background:#fff;border:1px solid #e2e8f0;border-radius:12px">
+      <p style="font-size:.875rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.05em">Enterprise</p>
+      <p style="font-size:2.25rem;font-weight:700;color:#0f172a;margin-top:.5rem">Custom</p>
+      <ul style="margin-top:1.5rem;list-style:none;padding:0;display:flex;flex-direction:column;gap:.75rem">
+        <li style="color:#475569;font-size:.9375rem">✓ Everything in Pro</li>
+        <li style="color:#475569;font-size:.9375rem">✓ SSO + SAML</li>
+        <li style="color:#475569;font-size:.9375rem">✓ SLA guarantee</li>
+        <li style="color:#475569;font-size:.9375rem">✓ Dedicated support</li>
+      </ul>
+      <a href="/contact" style="display:block;margin-top:2rem;padding:.75rem;text-align:center;border:1px solid #cbd5e1;border-radius:8px;color:#475569;text-decoration:none;font-weight:500">Contact sales</a>
+    </div>
+
+  </div>
+</section>
+
+CONFIG [input/pricing-data.json]
+{
+  "_note": "CONFIG ref — defines the data shape the component receives as typed props",
+  "sectionTitle": "Simple, honest pricing",
+  "sectionSubtitle": "No hidden fees. Cancel anytime.",
+  "tiers": [
+    {
+      "name": "Starter",
+      "price": "$0",
+      "period": "/mo",
+      "highlighted": false,
+      "badge": null,
+      "features": ["3 projects", "5GB storage", "Community support"],
+      "ctaLabel": "Get started",
+      "ctaHref": "/signup"
+    },
+    {
+      "name": "Pro",
+      "price": "$49",
+      "period": "/mo",
+      "highlighted": true,
+      "badge": "Most popular",
+      "features": ["Unlimited projects", "100GB storage", "Priority support", "Team collaboration"],
+      "ctaLabel": "Start free trial",
+      "ctaHref": "/signup-pro"
+    },
+    {
+      "name": "Enterprise",
+      "price": "Custom",
+      "period": null,
+      "highlighted": false,
+      "badge": null,
+      "features": ["Everything in Pro", "SSO + SAML", "SLA guarantee", "Dedicated support"],
+      "ctaLabel": "Contact sales",
+      "ctaHref": "/contact"
+    }
+  ]
+}
+
+
+GENERATION INSTRUCTIONS
+You are converting a reference into a typed Next.js TSX component.
+Preserve LAYOUT INTENT. Replace all styling, library components, and incompatible logic with project equivalents.
+
+Begin with // FORGE NOTES: ref styling type detected, every import swap (ReferenceLib → ProjectLib), token mappings (reference value → project token), divergences with judgment call, incompatible logic replaced.
+
+IMPLEMENTATION
+1. Map EXTRACTED STYLES/CLASSNAMES → nearest design-arch tokens. Note all mappings and divergences in FORGE NOTES.
+2. Map external library components → design-arch equivalents. Note every swap in FORGE NOTES.
+3. Field types: text→string, rich text→block content, images→typed object with alt, links→conditional link, lists→typed array.
+4. Output order: types → data query additions → full component.
+5. Replace all reference styling with design-arch tokens.
+6. Replace all reference library components with design-arch equivalents.
+7. Replace incompatible logic with project-compatible patterns.
+8. Preserve layout intent: column count, stacking order, visual hierarchy.
+9. Use reference copy verbatim — no Lorem ipsum.
+
+ANTI-SLOP AESTHETIC GUARDRAIL
+Avoid generic AI-generated "template" aesthetics. Must feel hand-crafted for this project.
+  - No default hero gradients (from-blue-500 to-purple-600 and similar).
+  - No rainbow gradient text. Use design-arch foreground tokens.
+  - No placeholder icons that add nothing (SparkleIcon, CheckCircle as decoration).
+  - No "Get Started" / "Learn More" CTAs unless in the reference copy.
+  - No unnecessary emojis unless the reference uses them.
+  - No floating blur gradients as background filler without a design reason.
+  - No decorative 3-column "Feature" grids unless the reference has them.
+  - Match the reference's visual density; do not add padding or whitespace that wasn't there.
+If the reference is minimal, the output must also be minimal.
+
+ANTI-SLOP FIDELITY CHECK (required before writing output when an HTML ref is present):
+- [ ] Extract padding/margin values from ref CSS. Apply exact Tailwind equivalents.
+- [ ] Confirm background: dark (bg-foreground) vs light (bg-background).
+- [ ] Confirm decorative elements: patterns, watermarks, gradient overlays present or absent.
+- [ ] Confirm icon container: size, background, border-radius per ref.
+- [ ] Confirm button/CTA style: underline, filled, outlined per ref.
+Report each finding in FORGE NOTES before writing TSX.
+
+CONFIG SIGNAL — a data shape file is attached.
+  Treat it as a schema blueprint, not hardcoded content.
+  Map keys to field types:
+    string → text field
+    string[] → array of strings or title+description pairs
+    {label, href}[] → conditional link array
+    {image, title, text}[] → image+title+text array
+    boolean flags → variant selection (not a data field)
+  Config wins for data shape. Reference file wins for layout.
+  Component receives these as typed props — not direct config imports.
+
+WRITE OUTPUT TO: output/Component.tsx
+Begin with // FORGE NOTES then raw TSX. No markdown fences. No preamble after FORGE NOTES.
+Multiple files: separate with // --- FILE: relative/path/to/file.tsx
+
+STANDARDS COMPLIANCE: In FORGE NOTES, list every consulted standard and how it was applied.
+  Example: "// 04-color-tokens: applied (bg-primary, text-primary-foreground — no raw hex)"

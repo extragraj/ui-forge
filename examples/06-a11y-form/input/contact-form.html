@@ -1,0 +1,34 @@
+<!-- Example: CONVERT_SECTION +A11Y
+  node invoke.js \
+    --task "Convert contact form section; enforce WCAG 2.1 AA" \
+    --refs ./examples/06-a11y-form/input/contact-form.html \
+    --output ./examples/06-a11y-form/output/ContactForm.tsx \
+    --a11y
+-->
+
+<section class="contact" style="padding:80px 24px;background:#0F172A;color:#fff">
+  <div style="max-width:560px;margin:0 auto">
+    <h2 style="font-size:2rem;font-weight:700;margin-bottom:.5rem">Get in touch</h2>
+    <p style="color:#94A3B8;margin-bottom:2rem">We reply within one business day.</p>
+
+    <form style="display:flex;flex-direction:column;gap:1.25rem">
+      <div>
+        <div style="font-size:.875rem;font-weight:500;margin-bottom:.375rem">Name</div>
+        <input type="text" style="width:100%;padding:.75rem 1rem;background:#1E293B;border:1px solid #334155;border-radius:8px;color:#fff" />
+      </div>
+
+      <div>
+        <div style="font-size:.875rem;font-weight:500;margin-bottom:.375rem">Email</div>
+        <input type="email" style="width:100%;padding:.75rem 1rem;background:#1E293B;border:1px solid #334155;border-radius:8px;color:#fff" />
+        <p style="font-size:.8125rem;color:#EF4444;margin-top:.375rem">Please enter a valid email address.</p>
+      </div>
+
+      <div>
+        <div style="font-size:.875rem;font-weight:500;margin-bottom:.375rem">Message</div>
+        <textarea rows="5" style="width:100%;padding:.75rem 1rem;background:#1E293B;border:1px solid #334155;border-radius:8px;color:#fff;resize:vertical"></textarea>
+      </div>
+
+      <div style="background:#3B82F6;color:#fff;padding:.875rem 1.5rem;border-radius:8px;text-align:center;font-weight:600;cursor:pointer">Send message</div>
+    </form>
+  </div>
+</section>
